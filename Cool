@@ -1,6 +1,7 @@
 -- Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
 -- Variables
 local player = Players.LocalPlayer
@@ -11,6 +12,12 @@ local DISTANCE = 10
 local isEnabled = false
 local isAimbotEnabled = false
 
+-- Camera settings
+local cameraDistance = 10
+local MIN_DISTANCE = 5
+local MAX_DISTANCE = 50
+local lastTouchDistance = nil
+
 -- Create ScreenGui
 local gui = Instance.new("ScreenGui")
 gui.Name = "TeleportAndAimGUI"
@@ -19,13 +26,13 @@ gui.ResetOnSpawn = false
 -- Create main frame
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 200, 0, 300) -- Increased height for new button
+mainFrame.Size = UDim2.new(0, 200, 0, 300)
 mainFrame.Position = UDim2.new(0.8, 0, 0.5, -150)
 mainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 mainFrame.BorderSizePixel = 0
 mainFrame.Parent = gui
 
--- Add rounded corners
+-- Add rounded corners to main frame
 local corner = Instance.new("UICorner")
 corner.CornerRadius = UDim.new(0, 10)
 corner.Parent = mainFrame
@@ -46,6 +53,18 @@ title.Parent = mainFrame
 local titleCorner = Instance.new("UICorner")
 titleCorner.CornerRadius = UDim.new(0, 10)
 titleCorner.Parent = title
+
+-- Create status label
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Name = "StatusLabel"
+statusLabel.Size = UDim2.new(1, 0, 0, 20)
+statusLabel.Position = UDim2.new(0, 0, 0.08, 0)
+statusLabel.BackgroundTransparency = 1
+statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+statusLabel.Text = "Select a player"
+statusLabel.TextSize = 14
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.Parent = mainFrame
 
 -- Create player list
 local playerList = Instance.new("ScrollingFrame")
@@ -95,7 +114,7 @@ local aimButtonCorner = Instance.new("UICorner")
 aimButtonCorner.CornerRadius = UDim.new(0, 10)
 aimButtonCorner.Parent = aimToggleButton
 
--- Function to update player list
+-- Functions
 local function updatePlayerList()
     for _, child in pairs(playerList:GetChildren()) do
         if child:IsA("TextButton") then
@@ -122,6 +141,7 @@ local function updatePlayerList()
             
             button.MouseButton1Click:Connect(function()
                 targetPlayer = plr
+                statusLabel.Text = "Selected: " .. plr.Name
                 for _, btn in pairs(playerList:GetChildren()) do
                     if btn:IsA("TextButton") then
                         btn.BackgroundColor3 = btn == button and Color3.fromRGB(0, 120, 255) or Color3.fromRGB(55, 55, 55)
@@ -136,34 +156,33 @@ local function updatePlayerList()
     playerList.CanvasSize = UDim2.new(0, 0, 0, yPosition)
 end
 
--- Function to get position behind target
 local function getPositionBehindTarget(targetCFrame)
     return targetCFrame * CFrame.new(0, 0, DISTANCE)
 end
 
--- Function to aim at target
 local function aimAtTarget()
     if not targetPlayer or not targetPlayer.Character or not player.Character then
         return
     end
     
     local targetHead = targetPlayer.Character:FindFirstChild("Head")
-    local playerHead = player.Character:FindFirstChild("Head")
+    local camera = workspace.CurrentCamera
     
-    if targetHead and playerHead then
-        local camera = workspace.CurrentCamera
+    if targetHead then
         local targetPos = targetHead.Position
-        local playerPos = playerHead.Position
         
-        -- Calculate direction to target
-        local direction = CFrame.new(playerPos, targetPos)
+        -- Calculate camera position
+        local currentCameraPos = camera.CFrame.Position
+        local lookVector = (targetPos - currentCameraPos).Unit
+        local desiredCameraPos = targetPos - (lookVector * cameraDistance)
         
-        -- Set camera CFrame
-        camera.CFrame = direction
+        -- Set camera CFrame with smooth interpolation
+        local smoothness = 0.2
+        local targetCFrame = CFrame.new(desiredCameraPos, targetPos)
+        camera.CFrame = camera.CFrame:Lerp(targetCFrame, smoothness)
     end
 end
 
--- Toggle teleport function
 local function toggleTeleport()
     isEnabled = not isEnabled
     
@@ -171,6 +190,7 @@ local function toggleTeleport()
         if targetPlayer then
             toggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
             toggleButton.Text = "STOP FOLLOW"
+            statusLabel.Text = "Following: " .. targetPlayer.Name
             
             connection = RunService.Heartbeat:Connect(function()
                 if not targetPlayer or not targetPlayer.Character or not player.Character then
@@ -189,6 +209,7 @@ local function toggleTeleport()
             isEnabled = false
             toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
             toggleButton.Text = "SELECT PLAYER"
+            statusLabel.Text = "Select a player first"
         end
     else
         if connection then
@@ -197,10 +218,10 @@ local function toggleTeleport()
         end
         toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
         toggleButton.Text = "START FOLLOW"
+        statusLabel.Text = targetPlayer and "Selected: " .. targetPlayer.Name or "Select a player"
     end
 end
 
--- Toggle aimbot function
 local function toggleAimbot()
     isAimbotEnabled = not isAimbotEnabled
     
@@ -208,35 +229,75 @@ local function toggleAimbot()
         if targetPlayer then
             aimToggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
             aimToggleButton.Text = "STOP AUTO AIM"
+            statusLabel.Text = "Aiming at: " .. targetPlayer.Name
             
-            aimConnection = RunService.RenderStepped:Connect(function()
-                aimAtTarget()
-            end)
+            -- Set camera type to scriptable
+            workspace.CurrentCamera.CameraType = Enum.CameraType.Scriptable
+            
+            aimConnection = RunService.RenderStepped:Connect(aimAtTarget)
         else
             isAimbotEnabled = false
             aimToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
             aimToggleButton.Text = "SELECT PLAYER"
+            statusLabel.Text = "Select a player first"
         end
     else
         if aimConnection then
             aimConnection:Disconnect()
             aimConnection = nil
         end
+        -- Reset camera type
+        workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
         aimToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
         aimToggleButton.Text = "START AUTO AIM"
+        statusLabel.Text = targetPlayer and "Selected: " .. targetPlayer.Name or "Select a player"
     end
 end
 
--- Connect buttons
-toggleButton.MouseButton1Click:Connect(toggleTeleport)
-aimToggleButton.MouseButton1Click:Connect(toggleAimbot)
+-- Handle mouse wheel for camera zoom
+UserInputService.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseWheel and isAimbotEnabled then
+        local zoomSpeed = 2
+        cameraDistance = math.clamp(
+            cameraDistance - (input.Position.Z * zoomSpeed),
+            MIN_DISTANCE,
+            MAX_DISTANCE
+        )
+    end
+end)
 
--- Update player list when players join/leave
-Players.PlayerAdded:Connect(updatePlayerList)
-Players.PlayerRemoving:Connect(updatePlayerList)
+-- Handle touch input for mobile zoom
+local function handlePinchZoom(scale)
+    if isAimbotEnabled then
+        local zoomChange = (scale - 1) * 10
+        cameraDistance = math.clamp(
+            cameraDistance + zoomChange,
+            MIN_DISTANCE,
+            MAX_DISTANCE
+        )
+    end
+end
 
--- Initial player list update
-updatePlayerList()
+UserInputService.TouchMoved:Connect(function(touch, gameProcessed)
+    if gameProcessed then return end
+    
+    local touches = UserInputService:GetTouches()
+    
+    if #touches == 2 then
+        local pos1 = touches[1].Position
+        local pos2 = touches[2].Position
+        local currentDistance = (pos2 - pos1).Magnitude
+        
+        if lastTouchDistance then
+            local scale = currentDistance / lastTouchDistance
+            handlePinchZoom(scale)
+        end
+        
+        lastTouchDistance = currentDistance
+    else
+        lastTouchDistance = nil
+    end
+end)
 
 -- Make GUI draggable
 local dragging
@@ -270,11 +331,22 @@ mainFrame.InputChanged:Connect(function(input)
     end
 end)
 
-game:GetService("UserInputService").InputChanged:Connect(function(input)
+UserInputService.InputChanged:Connect(function(input)
     if input == dragInput and dragging then
         update(input)
     end
 end)
+
+-- Connect buttons
+toggleButton.MouseButton1Click:Connect(toggleTeleport)
+aimToggleButton.MouseButton1Click:Connect(toggleAimbot)
+
+-- Update player list when players join/leave
+Players.PlayerAdded:Connect(updatePlayerList)
+Players.PlayerRemoving:Connect(updatePlayerList)
+
+-- Initial player list update
+updatePlayerList()
 
 -- Parent GUI to PlayerGui
 gui.Parent = player:WaitForChild("PlayerGui")
@@ -286,6 +358,11 @@ script.Destroyed:Connect(function()
     end
     if aimConnection then
         aimConnection:Disconnect()
+    end
+    -- Reset camera
+    local camera = workspace.CurrentCamera
+    if camera then
+        camera.CameraType = Enum.CameraType.Custom
     end
     gui:Destroy()
 end)
