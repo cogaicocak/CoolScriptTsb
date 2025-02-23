@@ -1,0 +1,291 @@
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+-- Variables
+local player = Players.LocalPlayer
+local connection = nil
+local aimConnection = nil
+local targetPlayer = nil
+local DISTANCE = 10
+local isEnabled = false
+local isAimbotEnabled = false
+
+-- Create ScreenGui
+local gui = Instance.new("ScreenGui")
+gui.Name = "TeleportAndAimGUI"
+gui.ResetOnSpawn = false
+
+-- Create main frame
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 200, 0, 300) -- Increased height for new button
+mainFrame.Position = UDim2.new(0.8, 0, 0.5, -150)
+mainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = gui
+
+-- Add rounded corners
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 10)
+corner.Parent = mainFrame
+
+-- Create title
+local title = Instance.new("TextLabel")
+title.Name = "Title"
+title.Size = UDim2.new(1, 0, 0, 30)
+title.Position = UDim2.new(0, 0, 0, 0)
+title.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Text = "Game Controls"
+title.TextSize = 18
+title.Font = Enum.Font.GothamBold
+title.Parent = mainFrame
+
+-- Add corner to title
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 10)
+titleCorner.Parent = title
+
+-- Create player list
+local playerList = Instance.new("ScrollingFrame")
+playerList.Name = "PlayerList"
+playerList.Size = UDim2.new(0.9, 0, 0.5, 0)
+playerList.Position = UDim2.new(0.05, 0, 0.15, 0)
+playerList.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+playerList.BorderSizePixel = 0
+playerList.ScrollBarThickness = 4
+playerList.Parent = mainFrame
+
+-- Add corner to player list
+local listCorner = Instance.new("UICorner")
+listCorner.CornerRadius = UDim.new(0, 10)
+listCorner.Parent = playerList
+
+-- Create toggle button for Teleport
+local toggleButton = Instance.new("TextButton")
+toggleButton.Name = "ToggleButton"
+toggleButton.Size = UDim2.new(0.9, 0, 0, 40)
+toggleButton.Position = UDim2.new(0.05, 0, 0.7, 0)
+toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.Text = "START FOLLOW"
+toggleButton.TextSize = 18
+toggleButton.Font = Enum.Font.GothamBold
+toggleButton.Parent = mainFrame
+
+-- Create toggle button for Aimbot
+local aimToggleButton = Instance.new("TextButton")
+aimToggleButton.Name = "AimToggleButton"
+aimToggleButton.Size = UDim2.new(0.9, 0, 0, 40)
+aimToggleButton.Position = UDim2.new(0.05, 0, 0.85, 0)
+aimToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+aimToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+aimToggleButton.Text = "START AUTO AIM"
+aimToggleButton.TextSize = 18
+aimToggleButton.Font = Enum.Font.GothamBold
+aimToggleButton.Parent = mainFrame
+
+-- Add corners to buttons
+local buttonCorner = Instance.new("UICorner")
+buttonCorner.CornerRadius = UDim.new(0, 10)
+buttonCorner.Parent = toggleButton
+
+local aimButtonCorner = Instance.new("UICorner")
+aimButtonCorner.CornerRadius = UDim.new(0, 10)
+aimButtonCorner.Parent = aimToggleButton
+
+-- Function to update player list
+local function updatePlayerList()
+    for _, child in pairs(playerList:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+    
+    local yPosition = 5
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= player then
+            local button = Instance.new("TextButton")
+            button.Size = UDim2.new(0.9, 0, 0, 30)
+            button.Position = UDim2.new(0.05, 0, 0, yPosition)
+            button.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
+            button.TextColor3 = Color3.fromRGB(255, 255, 255)
+            button.Text = plr.Name
+            button.TextSize = 14
+            button.Font = Enum.Font.Gotham
+            button.Parent = playerList
+            
+            local playerButtonCorner = Instance.new("UICorner")
+            playerButtonCorner.CornerRadius = UDim.new(0, 5)
+            playerButtonCorner.Parent = button
+            
+            button.MouseButton1Click:Connect(function()
+                targetPlayer = plr
+                for _, btn in pairs(playerList:GetChildren()) do
+                    if btn:IsA("TextButton") then
+                        btn.BackgroundColor3 = btn == button and Color3.fromRGB(0, 120, 255) or Color3.fromRGB(55, 55, 55)
+                    end
+                end
+            end)
+            
+            yPosition = yPosition + 35
+        end
+    end
+    
+    playerList.CanvasSize = UDim2.new(0, 0, 0, yPosition)
+end
+
+-- Function to get position behind target
+local function getPositionBehindTarget(targetCFrame)
+    return targetCFrame * CFrame.new(0, 0, DISTANCE)
+end
+
+-- Function to aim at target
+local function aimAtTarget()
+    if not targetPlayer or not targetPlayer.Character or not player.Character then
+        return
+    end
+    
+    local targetHead = targetPlayer.Character:FindFirstChild("Head")
+    local playerHead = player.Character:FindFirstChild("Head")
+    
+    if targetHead and playerHead then
+        local camera = workspace.CurrentCamera
+        local targetPos = targetHead.Position
+        local playerPos = playerHead.Position
+        
+        -- Calculate direction to target
+        local direction = CFrame.new(playerPos, targetPos)
+        
+        -- Set camera CFrame
+        camera.CFrame = direction
+    end
+end
+
+-- Toggle teleport function
+local function toggleTeleport()
+    isEnabled = not isEnabled
+    
+    if isEnabled then
+        if targetPlayer then
+            toggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+            toggleButton.Text = "STOP FOLLOW"
+            
+            connection = RunService.Heartbeat:Connect(function()
+                if not targetPlayer or not targetPlayer.Character or not player.Character then
+                    return
+                end
+                
+                local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                local playerRoot = player.Character:FindFirstChild("HumanoidRootPart")
+                
+                if targetRoot and playerRoot then
+                    local newPosition = getPositionBehindTarget(targetRoot.CFrame)
+                    playerRoot.CFrame = newPosition
+                end
+            end)
+        else
+            isEnabled = false
+            toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+            toggleButton.Text = "SELECT PLAYER"
+        end
+    else
+        if connection then
+            connection:Disconnect()
+            connection = nil
+        end
+        toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+        toggleButton.Text = "START FOLLOW"
+    end
+end
+
+-- Toggle aimbot function
+local function toggleAimbot()
+    isAimbotEnabled = not isAimbotEnabled
+    
+    if isAimbotEnabled then
+        if targetPlayer then
+            aimToggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+            aimToggleButton.Text = "STOP AUTO AIM"
+            
+            aimConnection = RunService.RenderStepped:Connect(function()
+                aimAtTarget()
+            end)
+        else
+            isAimbotEnabled = false
+            aimToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+            aimToggleButton.Text = "SELECT PLAYER"
+        end
+    else
+        if aimConnection then
+            aimConnection:Disconnect()
+            aimConnection = nil
+        end
+        aimToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+        aimToggleButton.Text = "START AUTO AIM"
+    end
+end
+
+-- Connect buttons
+toggleButton.MouseButton1Click:Connect(toggleTeleport)
+aimToggleButton.MouseButton1Click:Connect(toggleAimbot)
+
+-- Update player list when players join/leave
+Players.PlayerAdded:Connect(updatePlayerList)
+Players.PlayerRemoving:Connect(updatePlayerList)
+
+-- Initial player list update
+updatePlayerList()
+
+-- Make GUI draggable
+local dragging
+local dragInput
+local dragStart
+local startPos
+
+local function update(input)
+    local delta = input.Position - dragStart
+    mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X,
+        startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+mainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+mainFrame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+game:GetService("UserInputService").InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        update(input)
+    end
+end)
+
+-- Parent GUI to PlayerGui
+gui.Parent = player:WaitForChild("PlayerGui")
+
+-- Cleanup on script destroy
+script.Destroyed:Connect(function()
+    if connection then
+        connection:Disconnect()
+    end
+    if aimConnection then
+        aimConnection:Disconnect()
+    end
+    gui:Destroy()
+end)
