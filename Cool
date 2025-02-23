@@ -7,10 +7,11 @@ local UserInputService = game:GetService("UserInputService")
 local player = Players.LocalPlayer
 local connection = nil
 local aimConnection = nil
-local targetPlayer = nil
+local targetObject = nil
 local DISTANCE = 10
 local isEnabled = false
 local isAimbotEnabled = false
+local LOW_HEALTH_THRESHOLD = 20
 
 -- Zoom variables
 local MIN_ZOOM = 5
@@ -44,7 +45,7 @@ title.Size = UDim2.new(1, 0, 0, 30)
 title.Position = UDim2.new(0, 0, 0, 0)
 title.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.Text = "Game Controls"
+title.Text = "Low HP Targeter"
 title.TextSize = 18
 title.Font = Enum.Font.GothamBold
 title.Parent = mainFrame
@@ -54,20 +55,20 @@ local titleCorner = Instance.new("UICorner")
 titleCorner.CornerRadius = UDim.new(0, 10)
 titleCorner.Parent = title
 
--- Create player list
-local playerList = Instance.new("ScrollingFrame")
-playerList.Name = "PlayerList"
-playerList.Size = UDim2.new(0.9, 0, 0.5, 0)
-playerList.Position = UDim2.new(0.05, 0, 0.15, 0)
-playerList.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-playerList.BorderSizePixel = 0
-playerList.ScrollBarThickness = 4
-playerList.Parent = mainFrame
+-- Create target list
+local targetList = Instance.new("ScrollingFrame")
+targetList.Name = "TargetList"
+targetList.Size = UDim2.new(0.9, 0, 0.5, 0)
+targetList.Position = UDim2.new(0.05, 0, 0.15, 0)
+targetList.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+targetList.BorderSizePixel = 0
+targetList.ScrollBarThickness = 4
+targetList.Parent = mainFrame
 
--- Add corner to player list
+-- Add corner to target list
 local listCorner = Instance.new("UICorner")
 listCorner.CornerRadius = UDim.new(0, 10)
-listCorner.Parent = playerList
+listCorner.Parent = targetList
 
 -- Create toggle buttons
 local toggleButton = Instance.new("TextButton")
@@ -114,34 +115,54 @@ local function handleZoom()
     end)
 end
 
--- Function to update player list
-local function updatePlayerList()
-    for _, child in pairs(playerList:GetChildren()) do
+-- Function to find objects with Humanoid and low health
+local function findLowHealthTargets()
+    local lowHealthTargets = {}
+    
+    -- Search in workspace for models with Humanoids
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") then
+            local humanoid = obj:FindFirstChild("Humanoid")
+            if humanoid and humanoid.Health < LOW_HEALTH_THRESHOLD and humanoid.Health > 0 then
+                table.insert(lowHealthTargets, obj)
+            end
+        end
+    end
+    
+    return lowHealthTargets
+end
+
+-- Function to update target list
+local function updateTargetList()
+    for _, child in pairs(targetList:GetChildren()) do
         if child:IsA("TextButton") then
             child:Destroy()
         end
     end
     
     local yPosition = 5
-    for _, plr in pairs(Players:GetPlayers()) do
-        if plr ~= player then
+    local targets = findLowHealthTargets()
+    
+    for _, target in pairs(targets) do
+        local humanoid = target:FindFirstChild("Humanoid")
+        if humanoid then
             local button = Instance.new("TextButton")
             button.Size = UDim2.new(0.9, 0, 0, 30)
             button.Position = UDim2.new(0.05, 0, 0, yPosition)
             button.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
             button.TextColor3 = Color3.fromRGB(255, 255, 255)
-            button.Text = plr.Name
+            button.Text = string.format("%s (HP: %.1f)", target.Name, humanoid.Health)
             button.TextSize = 14
             button.Font = Enum.Font.Gotham
-            button.Parent = playerList
+            button.Parent = targetList
             
-            local playerButtonCorner = Instance.new("UICorner")
-            playerButtonCorner.CornerRadius = UDim.new(0, 5)
-            playerButtonCorner.Parent = button
+            local targetButtonCorner = Instance.new("UICorner")
+            targetButtonCorner.CornerRadius = UDim.new(0, 5)
+            targetButtonCorner.Parent = button
             
             button.MouseButton1Click:Connect(function()
-                targetPlayer = plr
-                for _, btn in pairs(playerList:GetChildren()) do
+                targetObject = target
+                for _, btn in pairs(targetList:GetChildren()) do
                     if btn:IsA("TextButton") then
                         btn.BackgroundColor3 = btn == button and Color3.fromRGB(0, 120, 255) or Color3.fromRGB(55, 55, 55)
                     end
@@ -152,7 +173,7 @@ local function updatePlayerList()
         end
     end
     
-    playerList.CanvasSize = UDim2.new(0, 0, 0, yPosition)
+    targetList.CanvasSize = UDim2.new(0, 0, 0, yPosition)
 end
 
 -- Function to get position behind target
@@ -162,30 +183,35 @@ end
 
 -- Function to aim at target
 local function aimAtTarget()
-    if not targetPlayer or not targetPlayer.Character or not player.Character then
+    if not targetObject or not player.Character then
         return
     end
     
-    local targetHead = targetPlayer.Character:FindFirstChild("Head")
+    local targetHumanoid = targetObject:FindFirstChild("Humanoid")
+    local targetHead = targetObject:FindFirstChild("Head")
     local playerHead = player.Character:FindFirstChild("Head")
     local playerHumanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
     
-    if targetHead and playerHead and playerHumanoidRootPart then
+    if targetHead and playerHead and playerHumanoidRootPart and targetHumanoid and targetHumanoid.Health > 0 then
         local camera = workspace.CurrentCamera
         local targetPos = targetHead.Position
         local playerPos = playerHead.Position
         
-        -- Tính toán vector hướng từ player đến target
+        -- Calculate direction vector from player to target
         local lookVector = (targetPos - playerPos).Unit
         
-        -- Tạo CFrame mới cho nhân vật, luôn hướng về target
+        -- Create new CFrame for character, always facing target
         playerHumanoidRootPart.CFrame = CFrame.lookAt(playerHumanoidRootPart.Position, targetPos)
         
-        -- Tính toán vị trí camera với zoom
+        -- Calculate camera position with zoom
         local cameraPos = playerPos - lookVector * currentZoom
         
-        -- Đặt camera
+        -- Set camera
         camera.CFrame = CFrame.new(cameraPos, targetPos)
+    else
+        -- If target is dead or invalid, clear target
+        targetObject = nil
+        updateTargetList()
     end
 end
 
@@ -194,27 +220,33 @@ local function toggleTeleport()
     isEnabled = not isEnabled
     
     if isEnabled then
-        if targetPlayer then
+        if targetObject then
             toggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
             toggleButton.Text = "STOP FOLLOW"
             
             connection = RunService.Heartbeat:Connect(function()
-                if not targetPlayer or not targetPlayer.Character or not player.Character then
+                if not targetObject or not player.Character then
                     return
                 end
                 
-                local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                local targetHumanoid = targetObject:FindFirstChild("Humanoid")
+                local targetRoot = targetObject:FindFirstChild("HumanoidRootPart")
                 local playerRoot = player.Character:FindFirstChild("HumanoidRootPart")
                 
-                if targetRoot and playerRoot then
+                if targetRoot and playerRoot and targetHumanoid and targetHumanoid.Health > 0 then
                     local newPosition = getPositionBehindTarget(targetRoot.CFrame)
                     playerRoot.CFrame = newPosition
+                else
+                    -- If target is dead or invalid, stop following
+                    toggleTeleport()
+                    targetObject = nil
+                    updateTargetList()
                 end
             end)
         else
             isEnabled = false
             toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-            toggleButton.Text = "SELECT PLAYER"
+            toggleButton.Text = "SELECT TARGET"
         end
     else
         if connection then
@@ -231,7 +263,7 @@ local function toggleAimbot()
     isAimbotEnabled = not isAimbotEnabled
     
     if isAimbotEnabled then
-        if targetPlayer then
+        if targetObject then
             aimToggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
             aimToggleButton.Text = "STOP AUTO AIM"
             
@@ -241,7 +273,7 @@ local function toggleAimbot()
         else
             isAimbotEnabled = false
             aimToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-            aimToggleButton.Text = "SELECT PLAYER"
+            aimToggleButton.Text = "SELECT TARGET"
         end
     else
         if aimConnection then
@@ -298,12 +330,11 @@ aimToggleButton.MouseButton1Click:Connect(toggleAimbot)
 -- Initialize zoom handling
 handleZoom()
 
--- Update player list when players join/leave
-Players.PlayerAdded:Connect(updatePlayerList)
-Players.PlayerRemoving:Connect(updatePlayerList)
-
--- Initial player list update
-updatePlayerList()
+-- Update target list periodically
+local updateConnection = RunService.Heartbeat:Connect(function()
+    updateTargetList()
+    wait(1) -- Update every second
+end)
 
 -- Parent GUI to PlayerGui
 gui.Parent = player:WaitForChild("PlayerGui")
@@ -315,6 +346,9 @@ script.Destroyed:Connect(function()
     end
     if aimConnection then
         aimConnection:Disconnect()
+    end
+    if updateConnection then
+        updateConnection:Disconnect()
     end
     gui:Destroy()
 end)
