@@ -7,10 +7,12 @@ local UserInputService = game:GetService("UserInputService")
 local player = Players.LocalPlayer
 local connection = nil
 local aimConnection = nil
+local facingConnection = nil
 local targetPlayer = nil
 local DISTANCE = 10
 local isEnabled = false
 local isAimbotEnabled = false
+local isCharacterFacingEnabled = false
 
 -- Camera settings
 local cameraDistance = 10
@@ -20,14 +22,14 @@ local lastTouchDistance = nil
 
 -- Create ScreenGui
 local gui = Instance.new("ScreenGui")
-gui.Name = "TeleportAndAimGUI"
+gui.Name = "FollowAndAimGUI"
 gui.ResetOnSpawn = false
 
 -- Create main frame
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 200, 0, 300)
-mainFrame.Position = UDim2.new(0.8, 0, 0.5, -150)
+mainFrame.Size = UDim2.new(0, 200, 0, 350)
+mainFrame.Position = UDim2.new(0.8, 0, 0.5, -175)
 mainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 mainFrame.BorderSizePixel = 0
 mainFrame.Parent = gui
@@ -69,7 +71,7 @@ statusLabel.Parent = mainFrame
 -- Create player list
 local playerList = Instance.new("ScrollingFrame")
 playerList.Name = "PlayerList"
-playerList.Size = UDim2.new(0.9, 0, 0.5, 0)
+playerList.Size = UDim2.new(0.9, 0, 0.45, 0)
 playerList.Position = UDim2.new(0.05, 0, 0.15, 0)
 playerList.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 playerList.BorderSizePixel = 0
@@ -85,7 +87,7 @@ listCorner.Parent = playerList
 local toggleButton = Instance.new("TextButton")
 toggleButton.Name = "ToggleButton"
 toggleButton.Size = UDim2.new(0.9, 0, 0, 40)
-toggleButton.Position = UDim2.new(0.05, 0, 0.7, 0)
+toggleButton.Position = UDim2.new(0.05, 0, 0.65, 0)
 toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
 toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 toggleButton.Text = "START FOLLOW"
@@ -97,13 +99,25 @@ toggleButton.Parent = mainFrame
 local aimToggleButton = Instance.new("TextButton")
 aimToggleButton.Name = "AimToggleButton"
 aimToggleButton.Size = UDim2.new(0.9, 0, 0, 40)
-aimToggleButton.Position = UDim2.new(0.05, 0, 0.85, 0)
+aimToggleButton.Position = UDim2.new(0.05, 0, 0.77, 0)
 aimToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
 aimToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 aimToggleButton.Text = "START AUTO AIM"
 aimToggleButton.TextSize = 18
 aimToggleButton.Font = Enum.Font.GothamBold
 aimToggleButton.Parent = mainFrame
+
+-- Create toggle button for Facing
+local facingToggleButton = Instance.new("TextButton")
+facingToggleButton.Name = "FacingToggleButton"
+facingToggleButton.Size = UDim2.new(0.9, 0, 0, 40)
+facingToggleButton.Position = UDim2.new(0.05, 0, 0.89, 0)
+facingToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+facingToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+facingToggleButton.Text = "START FACING"
+facingToggleButton.TextSize = 18
+facingToggleButton.Font = Enum.Font.GothamBold
+facingToggleButton.Parent = mainFrame
 
 -- Add corners to buttons
 local buttonCorner = Instance.new("UICorner")
@@ -113,6 +127,10 @@ buttonCorner.Parent = toggleButton
 local aimButtonCorner = Instance.new("UICorner")
 aimButtonCorner.CornerRadius = UDim.new(0, 10)
 aimButtonCorner.Parent = aimToggleButton
+
+local facingButtonCorner = Instance.new("UICorner")
+facingButtonCorner.CornerRadius = UDim.new(0, 10)
+facingButtonCorner.Parent = facingToggleButton
 
 -- Functions
 local function updatePlayerList()
@@ -160,6 +178,25 @@ local function getPositionBehindTarget(targetCFrame)
     return targetCFrame * CFrame.new(0, 0, DISTANCE)
 end
 
+local function updateCharacterFacing()
+    if not targetPlayer or not targetPlayer.Character or not player.Character then
+        return
+    end
+    
+    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local playerRoot = player.Character:FindFirstChild("HumanoidRootPart")
+    
+    if targetRoot and playerRoot then
+        local direction = (targetRoot.Position - playerRoot.Position).Unit
+        direction = Vector3.new(direction.X, 0, direction.Z)
+        
+        if not isEnabled then
+            playerRoot.CFrame = CFrame.new(playerRoot.Position) * 
+                CFrame.lookAt(playerRoot.Position, playerRoot.Position + direction)
+        end
+    end
+end
+
 local function aimAtTarget()
     if not targetPlayer or not targetPlayer.Character or not player.Character then
         return
@@ -170,13 +207,10 @@ local function aimAtTarget()
     
     if targetHead then
         local targetPos = targetHead.Position
-        
-        -- Calculate camera position
         local currentCameraPos = camera.CFrame.Position
         local lookVector = (targetPos - currentCameraPos).Unit
         local desiredCameraPos = targetPos - (lookVector * cameraDistance)
         
-        -- Set camera CFrame with smooth interpolation
         local smoothness = 0.2
         local targetCFrame = CFrame.new(desiredCameraPos, targetPos)
         camera.CFrame = camera.CFrame:Lerp(targetCFrame, smoothness)
@@ -201,8 +235,12 @@ local function toggleTeleport()
                 local playerRoot = player.Character:FindFirstChild("HumanoidRootPart")
                 
                 if targetRoot and playerRoot then
-                    local newPosition = getPositionBehindTarget(targetRoot.CFrame)
-                    playerRoot.CFrame = newPosition
+                    local targetPosition = getPositionBehindTarget(targetRoot.CFrame)
+                    local lookAt = (targetRoot.Position - targetPosition.Position).Unit
+                    lookAt = Vector3.new(lookAt.X, 0, lookAt.Z)
+                    
+                    playerRoot.CFrame = CFrame.new(targetPosition.Position) * 
+                        CFrame.lookAt(targetPosition.Position, targetPosition.Position + lookAt)
                 end
             end)
         else
@@ -231,7 +269,6 @@ local function toggleAimbot()
             aimToggleButton.Text = "STOP AUTO AIM"
             statusLabel.Text = "Aiming at: " .. targetPlayer.Name
             
-            -- Set camera type to scriptable
             workspace.CurrentCamera.CameraType = Enum.CameraType.Scriptable
             
             aimConnection = RunService.RenderStepped:Connect(aimAtTarget)
@@ -246,10 +283,36 @@ local function toggleAimbot()
             aimConnection:Disconnect()
             aimConnection = nil
         end
-        -- Reset camera type
         workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
         aimToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
         aimToggleButton.Text = "START AUTO AIM"
+        statusLabel.Text = targetPlayer and "Selected: " .. targetPlayer.Name or "Select a player"
+    end
+end
+
+local function toggleFacing()
+    isCharacterFacingEnabled = not isCharacterFacingEnabled
+    
+    if isCharacterFacingEnabled then
+        if targetPlayer then
+            facingToggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+            facingToggleButton.Text = "STOP FACING"
+            statusLabel.Text = "Facing: " .. targetPlayer.Name
+            
+            facingConnection = RunService.Heartbeat:Connect(updateCharacterFacing)
+        else
+            isCharacterFacingEnabled = false
+            facingToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+            facingToggleButton.Text = "SELECT PLAYER"
+            statusLabel.Text = "Select a player first"
+        end
+    else
+        if facingConnection then
+            facingConnection:Disconnect()
+            facingConnection = nil
+        end
+        facingToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+        facingToggleButton.Text = "START FACING"
         statusLabel.Text = targetPlayer and "Selected: " .. targetPlayer.Name or "Select a player"
     end
 end
@@ -305,6 +368,8 @@ local dragInput
 local dragStart
 local startPos
 
+-- Tiếp tục từ phần Make GUI draggable...
+
 local function update(input)
     local delta = input.Position - dragStart
     mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X,
@@ -340,10 +405,78 @@ end)
 -- Connect buttons
 toggleButton.MouseButton1Click:Connect(toggleTeleport)
 aimToggleButton.MouseButton1Click:Connect(toggleAimbot)
+facingToggleButton.MouseButton1Click:Connect(toggleFacing)
 
 -- Update player list when players join/leave
-Players.PlayerAdded:Connect(updatePlayerList)
-Players.PlayerRemoving:Connect(updatePlayerList)
+Players.PlayerAdded:Connect(function(plr)
+    updatePlayerList()
+    -- Nếu người chơi được theo dõi rời đi, reset các trạng thái
+    if targetPlayer and plr == targetPlayer then
+        targetPlayer = nil
+        statusLabel.Text = "Player left - Select new player"
+        
+        -- Reset các nút và kết nối
+        if connection then
+            connection:Disconnect()
+            connection = nil
+            isEnabled = false
+            toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+            toggleButton.Text = "START FOLLOW"
+        end
+        
+        if aimConnection then
+            aimConnection:Disconnect()
+            aimConnection = nil
+            isAimbotEnabled = false
+            aimToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+            aimToggleButton.Text = "START AUTO AIM"
+            workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+        end
+        
+        if facingConnection then
+            facingConnection:Disconnect()
+            facingConnection = nil
+            isCharacterFacingEnabled = false
+            facingToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+            facingToggleButton.Text = "START FACING"
+        end
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(plr)
+    updatePlayerList()
+    -- Nếu người chơi được theo dõi rời đi, reset các trạng thái
+    if targetPlayer and plr == targetPlayer then
+        targetPlayer = nil
+        statusLabel.Text = "Player left - Select new player"
+        
+        -- Reset các nút và kết nối
+        if connection then
+            connection:Disconnect()
+            connection = nil
+            isEnabled = false
+            toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+            toggleButton.Text = "START FOLLOW"
+        end
+        
+        if aimConnection then
+            aimConnection:Disconnect()
+            aimConnection = nil
+            isAimbotEnabled = false
+            aimToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+            aimToggleButton.Text = "START AUTO AIM"
+            workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+        end
+        
+        if facingConnection then
+            facingConnection:Disconnect()
+            facingConnection = nil
+            isCharacterFacingEnabled = false
+            facingToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+            facingToggleButton.Text = "START FACING"
+        end
+    end
+end)
 
 -- Initial player list update
 updatePlayerList()
@@ -359,6 +492,9 @@ script.Destroyed:Connect(function()
     if aimConnection then
         aimConnection:Disconnect()
     end
+    if facingConnection then
+        facingConnection:Disconnect()
+    end
     -- Reset camera
     local camera = workspace.CurrentCamera
     if camera then
@@ -366,3 +502,80 @@ script.Destroyed:Connect(function()
     end
     gui:Destroy()
 end)
+
+-- Handle character respawn
+player.CharacterAdded:Connect(function()
+    -- Tạm dừng các kết nối trong khi nhân vật respawn
+    local wasEnabled = isEnabled
+    local wasAimbotEnabled = isAimbotEnabled
+    local wasFacingEnabled = isCharacterFacingEnabled
+    
+    -- Reset tất cả
+    if connection then
+        connection:Disconnect()
+        connection = nil
+    end
+    if aimConnection then
+        aimConnection:Disconnect()
+        aimConnection = nil
+    end
+    if facingConnection then
+        facingConnection:Disconnect()
+        facingConnection = nil
+    end
+    
+    -- Đợi một chút để nhân vật load hoàn toàn
+    task.wait(0.5)
+    
+    -- Khôi phục các trạng thái nếu cần
+    if wasEnabled and targetPlayer then
+        toggleTeleport()
+    end
+    if wasAimbotEnabled and targetPlayer then
+        toggleAimbot()
+    end
+    if wasFacingEnabled and targetPlayer then
+        toggleFacing()
+    end
+end)
+
+-- Handle errors
+local function errorHandler(err)
+    warn("Error in Follow and Aim script:", err)
+    -- Reset các trạng thái nếu có lỗi
+    if connection then
+        connection:Disconnect()
+        connection = nil
+        isEnabled = false
+        toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+        toggleButton.Text = "START FOLLOW"
+    end
+    if aimConnection then
+        aimConnection:Disconnect()
+        aimConnection = nil
+        isAimbotEnabled = false
+        aimToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+        aimToggleButton.Text = "START AUTO AIM"
+        workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+    end
+    if facingConnection then
+        facingConnection:Disconnect()
+        facingConnection = nil
+        isCharacterFacingEnabled = false
+        facingToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+        facingToggleButton.Text = "START FACING"
+    end
+    statusLabel.Text = "Error occurred - Try again"
+end
+
+-- Wrap main functions in error handler
+for _, func in pairs({toggleTeleport, toggleAimbot, toggleFacing, updateCharacterFacing, aimAtTarget}) do
+    local originalFunc = func
+    _G[func] = function(...)
+        local success, result = pcall(originalFunc, ...)
+        if not success then
+            errorHandler(result)
+        end
+        return result
+    end
+end
