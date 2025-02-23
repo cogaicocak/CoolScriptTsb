@@ -1,320 +1,179 @@
 -- Services
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
 
--- Variables
-local player = Players.LocalPlayer
-local connection = nil
-local aimConnection = nil
-local targetPlayer = nil
-local DISTANCE = 10
-local isEnabled = false
-local isAimbotEnabled = false
+-- Skill Configuration
+local SKILLS = {
+    [1] = {
+        key = "1",
+        cooldown = 22, -- 5 seconds cooldown
+        lastUsed = 0
+    },
+    [2] = {
+        key = "2",
+        cooldown = 20, -- 8 seconds cooldown
+        lastUsed = 0
+    },
+    [3] = {
+        key = "3",
+        cooldown = 25, -- 12 seconds cooldown
+        lastUsed = 0
+    },
+    [4] = {
+        key = "4",
+        cooldown = 1, -- 15 seconds cooldown
+        lastUsed = 0
+    }
+}
 
--- Zoom variables
-local MIN_ZOOM = 5
-local MAX_ZOOM = 50
-local currentZoom = 20
-local ZOOM_SPEED = 2
+-- Auto Skill Variables
+local isAutoSkillEnabled = false
+local skillConnection = nil
 
--- Create ScreenGui
-local gui = Instance.new("ScreenGui")
-gui.Name = "TeleportAndAimGUI"
-gui.ResetOnSpawn = false
+-- Create Auto Skill Button
+local autoSkillButton = Instance.new("TextButton")
+autoSkillButton.Name = "AutoSkillButton"
+autoSkillButton.Size = UDim2.new(0.9, 0, 0, 40)
+autoSkillButton.Position = UDim2.new(0.05, 0, 0.75, 0) -- Adjust position as needed
+autoSkillButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+autoSkillButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+autoSkillButton.Text = "AUTO SKILLS OFF"
+autoSkillButton.TextSize = 18
+autoSkillButton.Font = Enum.Font.GothamBold
+autoSkillButton.Parent = mainFrame
 
--- Create main frame
-local mainFrame = Instance.new("Frame")
-mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 200, 0, 300)
-mainFrame.Position = UDim2.new(0.8, 0, 0.5, -150)
-mainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-mainFrame.BorderSizePixel = 0
-mainFrame.Parent = gui
+-- Add corner to button
+local autoSkillCorner = Instance.new("UICorner")
+autoSkillCorner.CornerRadius = UDim.new(0, 10)
+autoSkillCorner.Parent = autoSkillButton
 
--- Add rounded corners
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 10)
-corner.Parent = mainFrame
-
--- Create title
-local title = Instance.new("TextLabel")
-title.Name = "Title"
-title.Size = UDim2.new(1, 0, 0, 30)
-title.Position = UDim2.new(0, 0, 0, 0)
-title.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.Text = "Game Controls"
-title.TextSize = 18
-title.Font = Enum.Font.GothamBold
-title.Parent = mainFrame
-
--- Add corner to title
-local titleCorner = Instance.new("UICorner")
-titleCorner.CornerRadius = UDim.new(0, 10)
-titleCorner.Parent = title
-
--- Create player list
-local playerList = Instance.new("ScrollingFrame")
-playerList.Name = "PlayerList"
-playerList.Size = UDim2.new(0.9, 0, 0.5, 0)
-playerList.Position = UDim2.new(0.05, 0, 0.15, 0)
-playerList.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-playerList.BorderSizePixel = 0
-playerList.ScrollBarThickness = 4
-playerList.Parent = mainFrame
-
--- Add corner to player list
-local listCorner = Instance.new("UICorner")
-listCorner.CornerRadius = UDim.new(0, 10)
-listCorner.Parent = playerList
-
--- Create toggle buttons
-local toggleButton = Instance.new("TextButton")
-toggleButton.Name = "ToggleButton"
-toggleButton.Size = UDim2.new(0.9, 0, 0, 40)
-toggleButton.Position = UDim2.new(0.05, 0, 0.7, 0)
-toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleButton.Text = "START FOLLOW"
-toggleButton.TextSize = 18
-toggleButton.Font = Enum.Font.GothamBold
-toggleButton.Parent = mainFrame
-
-local aimToggleButton = Instance.new("TextButton")
-aimToggleButton.Name = "AimToggleButton"
-aimToggleButton.Size = UDim2.new(0.9, 0, 0, 40)
-aimToggleButton.Position = UDim2.new(0.05, 0, 0.85, 0)
-aimToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-aimToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-aimToggleButton.Text = "START AUTO AIM"
-aimToggleButton.TextSize = 18
-aimToggleButton.Font = Enum.Font.GothamBold
-aimToggleButton.Parent = mainFrame
-
--- Add corners to buttons
-local buttonCorner = Instance.new("UICorner")
-buttonCorner.CornerRadius = UDim.new(0, 10)
-buttonCorner.Parent = toggleButton
-
-local aimButtonCorner = Instance.new("UICorner")
-aimButtonCorner.CornerRadius = UDim.new(0, 10)
-aimButtonCorner.Parent = aimToggleButton
-
--- Handle zoom function
-local function handleZoom()
-    UserInputService.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseWheel then
-            if input.Position.Z > 0 then
-                currentZoom = math.max(MIN_ZOOM, currentZoom - ZOOM_SPEED)
-            else
-                currentZoom = math.min(MAX_ZOOM, currentZoom + ZOOM_SPEED)
-            end
-        end
-    end)
+-- Function to simulate key press
+local function simulateKeyPress(key)
+    -- Simulate key press
+    local virtualInput = game:GetService("VirtualInputManager")
+    virtualInput:SendKeyEvent(true, key, false, game)
+    wait(0.1) -- Small delay
+    virtualInput:SendKeyEvent(false, key, false, game)
 end
 
--- Function to update player list
-local function updatePlayerList()
-    for _, child in pairs(playerList:GetChildren()) do
-        if child:IsA("TextButton") then
-            child:Destroy()
-        end
-    end
+-- Function to check skill cooldowns and use skills
+local function useSkills()
+    if not isAutoSkillEnabled or not targetPlayer then return end
     
-    local yPosition = 5
-    for _, plr in pairs(Players:GetPlayers()) do
-        if plr ~= player then
-            local button = Instance.new("TextButton")
-            button.Size = UDim2.new(0.9, 0, 0, 30)
-            button.Position = UDim2.new(0.05, 0, 0, yPosition)
-            button.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
-            button.TextColor3 = Color3.fromRGB(255, 255, 255)
-            button.Text = plr.Name
-            button.TextSize = 14
-            button.Font = Enum.Font.Gotham
-            button.Parent = playerList
+    local currentTime = tick()
+    
+    -- Check and use each skill
+    for skillNumber, skillData in pairs(SKILLS) do
+        if currentTime - skillData.lastUsed >= skillData.cooldown then
+            simulateKeyPress(skillData.key)
+            skillData.lastUsed = currentTime
             
-            local playerButtonCorner = Instance.new("UICorner")
-            playerButtonCorner.CornerRadius = UDim.new(0, 5)
-            playerButtonCorner.Parent = button
+            -- Create visual feedback
+            local notification = Instance.new("TextLabel")
+            notification.Text = "Used Skill " .. skillNumber
+            notification.Size = UDim2.new(0, 100, 0, 20)
+            notification.Position = UDim2.new(0.5, -50, 0.3 + (skillNumber * 0.05), 0)
+            notification.BackgroundTransparency = 0.5
+            notification.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+            notification.TextColor3 = Color3.fromRGB(255, 255, 255)
+            notification.Parent = gui
             
-            button.MouseButton1Click:Connect(function()
-                targetPlayer = plr
-                for _, btn in pairs(playerList:GetChildren()) do
-                    if btn:IsA("TextButton") then
-                        btn.BackgroundColor3 = btn == button and Color3.fromRGB(0, 120, 255) or Color3.fromRGB(55, 55, 55)
-                    end
-                end
-            end)
-            
-            yPosition = yPosition + 35
+            -- Fade out and destroy notification
+            game:GetService("Debris"):AddItem(notification, 1)
+            local tween = game:GetService("TweenService"):Create(
+                notification,
+                TweenInfo.new(1),
+                {TextTransparency = 1, BackgroundTransparency = 1}
+            )
+            tween:Play()
         end
     end
-    
-    playerList.CanvasSize = UDim2.new(0, 0, 0, yPosition)
 end
 
--- Function to get position behind target
-local function getPositionBehindTarget(targetCFrame)
-    return targetCFrame * CFrame.new(0, 0, DISTANCE)
-end
-
--- Function to aim at target
-local function aimAtTarget()
-    if not targetPlayer or not targetPlayer.Character or not player.Character then
-        return
-    end
+-- Function to toggle auto skill
+local function toggleAutoSkill()
+    isAutoSkillEnabled = not isAutoSkillEnabled
     
-    local targetHead = targetPlayer.Character:FindFirstChild("Head")
-    local playerHead = player.Character:FindFirstChild("Head")
-    local playerHumanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-    
-    if targetHead and playerHead and playerHumanoidRootPart then
-        local camera = workspace.CurrentCamera
-        local targetPos = targetHead.Position
-        local playerPos = playerHead.Position
+    if isAutoSkillEnabled then
+        autoSkillButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        autoSkillButton.Text = "AUTO SKILLS ON"
         
-        -- Tính toán vector hướng từ player đến target
-        local lookVector = (targetPos - playerPos).Unit
-        
-        -- Tạo CFrame mới cho nhân vật, luôn hướng về target
-        playerHumanoidRootPart.CFrame = CFrame.lookAt(playerHumanoidRootPart.Position, targetPos)
-        
-        -- Tính toán vị trí camera với zoom
-        local cameraPos = playerPos - lookVector * currentZoom
-        
-        -- Đặt camera
-        camera.CFrame = CFrame.new(cameraPos, targetPos)
-    end
-end
-
--- Toggle teleport function
-local function toggleTeleport()
-    isEnabled = not isEnabled
-    
-    if isEnabled then
-        if targetPlayer then
-            toggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-            toggleButton.Text = "STOP FOLLOW"
-            
-            connection = RunService.Heartbeat:Connect(function()
-                if not targetPlayer or not targetPlayer.Character or not player.Character then
-                    return
-                end
-                
-                local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-                local playerRoot = player.Character:FindFirstChild("HumanoidRootPart")
-                
-                if targetRoot and playerRoot then
-                    local newPosition = getPositionBehindTarget(targetRoot.CFrame)
-                    playerRoot.CFrame = newPosition
-                end
-            end)
-        else
-            isEnabled = false
-            toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-            toggleButton.Text = "SELECT PLAYER"
+        -- Start the skill loop
+        if skillConnection then
+            skillConnection:Disconnect()
         end
-    else
-        if connection then
-            connection:Disconnect()
-            connection = nil
-        end
-        toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-        toggleButton.Text = "START FOLLOW"
-    end
-end
-
--- Toggle aimbot function
-local function toggleAimbot()
-    isAimbotEnabled = not isAimbotEnabled
-    
-    if isAimbotEnabled then
-        if targetPlayer then
-            aimToggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-            aimToggleButton.Text = "STOP AUTO AIM"
-            
-            aimConnection = RunService.RenderStepped:Connect(function()
-                aimAtTarget()
-            end)
-        else
-            isAimbotEnabled = false
-            aimToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-            aimToggleButton.Text = "SELECT PLAYER"
-        end
-    else
-        if aimConnection then
-            aimConnection:Disconnect()
-            aimConnection = nil
-        end
-        aimToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-        aimToggleButton.Text = "START AUTO AIM"
-    end
-end
-
--- Make GUI draggable
-local dragging
-local dragInput
-local dragStart
-local startPos
-
-local function update(input)
-    local delta = input.Position - dragStart
-    mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X,
-        startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-end
-
-mainFrame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = mainFrame.Position
         
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-            end
+        skillConnection = RunService.Heartbeat:Connect(function()
+            useSkills()
         end)
+    else
+        autoSkillButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+        autoSkillButton.Text = "AUTO SKILLS OFF"
+        
+        if skillConnection then
+            skillConnection:Disconnect()
+            skillConnection = nil
+        end
     end
-end)
+end
 
-mainFrame.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-        dragInput = input
+-- Connect auto skill button
+autoSkillButton.MouseButton1Click:Connect(toggleAutoSkill)
+
+-- Create cooldown indicators
+local cooldownFrame = Instance.new("Frame")
+cooldownFrame.Name = "CooldownFrame"
+cooldownFrame.Size = UDim2.new(0, 120, 0, 30)
+cooldownFrame.Position = UDim2.new(0, 10, 0.5, 0)
+cooldownFrame.BackgroundTransparency = 1
+cooldownFrame.Parent = gui
+
+-- Create skill indicators
+for i = 1, 4 do
+    local skillIndicator = Instance.new("Frame")
+    skillIndicator.Name = "Skill"..i.."Indicator"
+    skillIndicator.Size = UDim2.new(0, 25, 0, 25)
+    skillIndicator.Position = UDim2.new(0, (i-1) * 30, 0, 0)
+    skillIndicator.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    skillIndicator.Parent = cooldownFrame
+    
+    local skillLabel = Instance.new("TextLabel")
+    skillLabel.Size = UDim2.new(1, 0, 1, 0)
+    skillLabel.Text = i
+    skillLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    skillLabel.BackgroundTransparency = 1
+    skillLabel.Parent = skillIndicator
+    
+    local skillCorner = Instance.new("UICorner")
+    skillCorner.CornerRadius = UDim.new(0, 5)
+    skillCorner.Parent = skillIndicator
+end
+
+-- Update cooldown indicators
+local function updateCooldowns()
+    if not isAutoSkillEnabled then return end
+    
+    local currentTime = tick()
+    for i = 1, 4 do
+        local indicator = cooldownFrame:FindFirstChild("Skill"..i.."Indicator")
+        if indicator then
+            local timeLeft = SKILLS[i].cooldown - (currentTime - SKILLS[i].lastUsed)
+            if timeLeft > 0 then
+                indicator.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+            else
+                indicator.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+            end
+        end
     end
-end)
+end
 
-UserInputService.InputChanged:Connect(function(input)
-    if input == dragInput and dragging then
-        update(input)
-    end
-end)
+-- Connect cooldown updates
+RunService.RenderStepped:Connect(updateCooldowns)
 
--- Connect buttons
-toggleButton.MouseButton1Click:Connect(toggleTeleport)
-aimToggleButton.MouseButton1Click:Connect(toggleAimbot)
-
--- Initialize zoom handling
-handleZoom()
-
--- Update player list when players join/leave
-Players.PlayerAdded:Connect(updatePlayerList)
-Players.PlayerRemoving:Connect(updatePlayerList)
-
--- Initial player list update
-updatePlayerList()
-
--- Parent GUI to PlayerGui
-gui.Parent = player:WaitForChild("PlayerGui")
-
--- Cleanup on script destroy
+-- Clean up
 script.Destroyed:Connect(function()
-    if connection then
-        connection:Disconnect()
+    if skillConnection then
+        skillConnection:Disconnect()
     end
-    if aimConnection then
-        aimConnection:Disconnect()
-    end
-    gui:Destroy()
 end)
