@@ -156,27 +156,34 @@ local function handleZoom()
     end)
 end
 
+-- Function để tìm các đối tượng có máu dưới 20
 local function findLowHealthTargets()
     local lowHealthTargets = {}
     
-    local function searchInModel(model)
-        for _, obj in pairs(model:GetChildren()) do
-            if obj:IsA("Model") then
-                local humanoid = obj:FindFirstChild("Humanoid")
-                local rootPart = obj:FindFirstChild("HumanoidRootPart")
-                if humanoid and rootPart and humanoid.Health < LOW_HEALTH_THRESHOLD and humanoid.Health > 0 then
-                    table.insert(lowHealthTargets, obj)
-                end
-                searchInModel(obj)
+    -- Tìm trong tất cả các instance trong workspace
+    for _, instance in pairs(workspace:GetDescendants()) do
+        -- Kiểm tra nếu instance có Humanoid
+        local humanoid = instance:FindFirstChild("Humanoid")
+        if humanoid and instance:FindFirstChild("HumanoidRootPart") then
+            -- Debug để kiểm tra
+            print("Found humanoid in:", instance.Name, "with health:", humanoid.Health)
+            
+            -- Kiểm tra điều kiện máu
+            if humanoid.Health > 0 and humanoid.Health < LOW_HEALTH_THRESHOLD then
+                print("Adding target:", instance.Name, "Health:", humanoid.Health)
+                table.insert(lowHealthTargets, instance)
             end
         end
     end
     
-    searchInModel(workspace)
+    -- In ra số lượng mục tiêu tìm thấy
+    print("Total targets found:", #lowHealthTargets)
     return lowHealthTargets
 end
 
+-- Cập nhật danh sách mục tiêu thường xuyên hơn
 local function updateTargetList()
+    -- Xóa các button cũ
     for _, child in pairs(targetList:GetChildren()) do
         if child:IsA("TextButton") then
             child:Destroy()
@@ -186,51 +193,12 @@ local function updateTargetList()
     local yPosition = 5
     local targets = findLowHealthTargets()
     
-    for _, target in pairs(targets) do
-        local humanoid = target:FindFirstChild("Humanoid")
-        if humanoid then
-            local button = Instance.new("TextButton")
-            button.Size = UDim2.new(0.9, 0, 0, 30)
-            button.Position = UDim2.new(0.05, 0, 0, yPosition)
-            button.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
-            button.TextColor3 = Color3.fromRGB(255, 255, 255)
-            button.Text = string.format("%s (HP: %.1f)", target.Name, humanoid.Health)
-            button.TextSize = 14
-            button.Font = Enum.Font.Gotham
-            button.Parent = targetList
-            button.ZIndex = 2
-            
-            local buttonCorner = Instance.new("UICorner")
-            buttonCorner.CornerRadius = UDim.new(0, 5)
-            buttonCorner.Parent = button
-            
-            button.MouseEnter:Connect(function()
-                button.BackgroundColor3 = Color3.fromRGB(75, 75, 75)
-            end)
-            
-            button.MouseLeave:Connect(function()
-                if targetObject ~= target then
-                    button.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
-                end
-            end)
-            
-            button.MouseButton1Click:Connect(function()
-                targetObject = target
-                statusLabel.Text = "Target: " .. target.Name
-                
-                for _, btn in pairs(targetList:GetChildren()) do
-                    if btn:IsA("TextButton") then
-                        btn.BackgroundColor3 = btn == button and Color3.fromRGB(0, 120, 255) or Color3.fromRGB(55, 55, 55)
-                    end
-                end
-            end)
-            
-            yPosition = yPosition + 35
-        end
-    end
-    
-    targetList.CanvasSize = UDim2.new(0, 0, 0, yPosition)
-end
+    -- Hiển thị thông báo nếu không tìm thấy mục tiêu
+    if #targets == 0 then
+        local noTargetLabel = Instance.new("TextLabel")
+        noTargetLabel.Size = UDim2.new(0.9, 0, 0, 30)
+        noTargetLabel.Position = UDim2.new(0.05, 0, 0, yPosition)
+        noTargetLabel.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
 
 local function getPositionBehindTarget(targetCFrame)
     return targetCFrame * CFrame.new(0, 0, DISTANCE)
