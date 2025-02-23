@@ -1,116 +1,157 @@
 -- Services
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
--- Skill Configuration
+-- Variables
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local connection = nil
+local aimConnection = nil
+local skillConnection = nil
+local targetPlayer = nil
+
+-- Configuration
 local SKILLS = {
-    [1] = {
-        key = "1",
-        cooldown = 22, -- 5 seconds cooldown
-        lastUsed = 0
-    },
-    [2] = {
-        key = "2",
-        cooldown = 20, -- 8 seconds cooldown
-        lastUsed = 0
-    },
-    [3] = {
-        key = "3",
-        cooldown = 25, -- 12 seconds cooldown
-        lastUsed = 0
-    },
-    [4] = {
-        key = "4",
-        cooldown = 1, -- 15 seconds cooldown
-        lastUsed = 0
-    }
+    {key = Enum.KeyCode.One, cooldown = 22},
+    {key = Enum.KeyCode.Two, cooldown = 20},
+    {key = Enum.KeyCode.Three, cooldown = 25},
+    {key = Enum.KeyCode.Four, cooldown = 1}
 }
 
--- Auto Skill Variables
+local lastSkillUse = {0, 0, 0, 0}
 local isAutoSkillEnabled = false
-local skillConnection = nil
 
--- Create Auto Skill Button
-local autoSkillButton = Instance.new("TextButton")
-autoSkillButton.Name = "AutoSkillButton"
-autoSkillButton.Size = UDim2.new(0.9, 0, 0, 40)
-autoSkillButton.Position = UDim2.new(0.05, 0, 0.75, 0) -- Adjust position as needed
-autoSkillButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-autoSkillButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-autoSkillButton.Text = "AUTO SKILLS OFF"
-autoSkillButton.TextSize = 18
-autoSkillButton.Font = Enum.Font.GothamBold
-autoSkillButton.Parent = mainFrame
+-- Create GUI elements
+local gui = Instance.new("ScreenGui")
+gui.Name = "CombatGUI"
+gui.ResetOnSpawn = false
+gui.Parent = player.PlayerGui
 
--- Add corner to button
-local autoSkillCorner = Instance.new("UICorner")
-autoSkillCorner.CornerRadius = UDim.new(0, 10)
-autoSkillCorner.Parent = autoSkillButton
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 200, 0, 300)
+mainFrame.Position = UDim2.new(0.8, 0, 0.5, -150)
+mainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = gui
 
--- Function to simulate key press
-local function simulateKeyPress(key)
-    -- Simulate key press
-    local virtualInput = game:GetService("VirtualInputManager")
-    virtualInput:SendKeyEvent(true, key, false, game)
-    wait(0.1) -- Small delay
-    virtualInput:SendKeyEvent(false, key, false, game)
+-- Add rounded corners
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 10)
+corner.Parent = mainFrame
+
+-- Create skill button
+local skillButton = Instance.new("TextButton")
+skillButton.Name = "SkillButton"
+skillButton.Size = UDim2.new(0.9, 0, 0, 40)
+skillButton.Position = UDim2.new(0.05, 0, 0, 220)
+skillButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+skillButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+skillButton.Text = "AUTO SKILLS: OFF"
+skillButton.TextSize = 16
+skillButton.Font = Enum.Font.GothamBold
+skillButton.Parent = mainFrame
+
+local buttonCorner = Instance.new("UICorner")
+buttonCorner.CornerRadius = UDim.new(0, 5)
+buttonCorner.Parent = skillButton
+
+-- Create skill indicators
+local indicatorFrame = Instance.new("Frame")
+indicatorFrame.Name = "SkillIndicators"
+indicatorFrame.Size = UDim2.new(0.9, 0, 0, 40)
+indicatorFrame.Position = UDim2.new(0.05, 0, 0, 170)
+indicatorFrame.BackgroundTransparency = 1
+indicatorFrame.Parent = mainFrame
+
+-- Create individual skill indicators
+for i = 1, 4 do
+    local indicator = Instance.new("Frame")
+    indicator.Name = "Skill"..i
+    indicator.Size = UDim2.new(0.2, -5, 1, 0)
+    indicator.Position = UDim2.new(0.25 * (i-1), 2, 0, 0)
+    indicator.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    
+    local indicatorCorner = Instance.new("UICorner")
+    indicatorCorner.CornerRadius = UDim.new(0, 5)
+    indicatorCorner.Parent = indicator
+    
+    local text = Instance.new("TextLabel")
+    text.Size = UDim2.new(1, 0, 1, 0)
+    text.BackgroundTransparency = 1
+    text.Text = tostring(i)
+    text.TextColor3 = Color3.fromRGB(255, 255, 255)
+    text.TextSize = 16
+    text.Font = Enum.Font.GothamBold
+    text.Parent = indicator
+    
+    indicator.Parent = indicatorFrame
 end
 
--- Function to check skill cooldowns and use skills
+-- Function to safely simulate key press
+local function pressKey(keyCode)
+    pcall(function()
+        VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+        task.wait(0.1)
+        VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+    end)
+end
+
+-- Function to check if target is in range
+local function isTargetInRange()
+    if not targetPlayer or not targetPlayer.Character then return false end
+    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return false end
+    
+    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local playerRoot = player.Character.HumanoidRootPart
+    
+    if not targetRoot then return false end
+    
+    -- Check if target is within 50 studs
+    return (targetRoot.Position - playerRoot.Position).Magnitude <= 50
+end
+
+-- Function to use skills
 local function useSkills()
-    if not isAutoSkillEnabled or not targetPlayer then return end
+    if not isAutoSkillEnabled or not isTargetInRange() then return end
     
     local currentTime = tick()
     
-    -- Check and use each skill
-    for skillNumber, skillData in pairs(SKILLS) do
-        if currentTime - skillData.lastUsed >= skillData.cooldown then
-            simulateKeyPress(skillData.key)
-            skillData.lastUsed = currentTime
+    for i, skillData in ipairs(SKILLS) do
+        if currentTime - lastSkillUse[i] >= skillData.cooldown then
+            -- Use skill
+            pressKey(skillData.key)
+            lastSkillUse[i] = currentTime
             
-            -- Create visual feedback
-            local notification = Instance.new("TextLabel")
-            notification.Text = "Used Skill " .. skillNumber
-            notification.Size = UDim2.new(0, 100, 0, 20)
-            notification.Position = UDim2.new(0.5, -50, 0.3 + (skillNumber * 0.05), 0)
-            notification.BackgroundTransparency = 0.5
-            notification.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-            notification.TextColor3 = Color3.fromRGB(255, 255, 255)
-            notification.Parent = gui
-            
-            -- Fade out and destroy notification
-            game:GetService("Debris"):AddItem(notification, 1)
-            local tween = game:GetService("TweenService"):Create(
-                notification,
-                TweenInfo.new(1),
-                {TextTransparency = 1, BackgroundTransparency = 1}
-            )
-            tween:Play()
+            -- Update indicator
+            local indicator = indicatorFrame:FindFirstChild("Skill"..i)
+            if indicator then
+                indicator.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+                game:GetService("TweenService"):Create(
+                    indicator,
+                    TweenInfo.new(skillData.cooldown),
+                    {BackgroundColor3 = Color3.fromRGB(0, 255, 0)}
+                ):Play()
+            end
         end
     end
 end
 
--- Function to toggle auto skill
-local function toggleAutoSkill()
+-- Toggle auto skills function
+local function toggleAutoSkills()
     isAutoSkillEnabled = not isAutoSkillEnabled
+    skillButton.Text = "AUTO SKILLS: " .. (isAutoSkillEnabled and "ON" or "OFF")
+    skillButton.BackgroundColor3 = isAutoSkillEnabled and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(0, 255, 0)
     
     if isAutoSkillEnabled then
-        autoSkillButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-        autoSkillButton.Text = "AUTO SKILLS ON"
-        
-        -- Start the skill loop
-        if skillConnection then
-            skillConnection:Disconnect()
-        end
-        
-        skillConnection = RunService.Heartbeat:Connect(function()
-            useSkills()
-        end)
+        -- Start skill loop
+        if skillConnection then skillConnection:Disconnect() end
+        skillConnection = RunService.Heartbeat:Connect(useSkills)
     else
-        autoSkillButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-        autoSkillButton.Text = "AUTO SKILLS OFF"
-        
+        -- Stop skill loop
         if skillConnection then
             skillConnection:Disconnect()
             skillConnection = nil
@@ -118,62 +159,27 @@ local function toggleAutoSkill()
     end
 end
 
--- Connect auto skill button
-autoSkillButton.MouseButton1Click:Connect(toggleAutoSkill)
+-- Connect button
+skillButton.MouseButton1Click:Connect(toggleAutoSkills)
 
--- Create cooldown indicators
-local cooldownFrame = Instance.new("Frame")
-cooldownFrame.Name = "CooldownFrame"
-cooldownFrame.Size = UDim2.new(0, 120, 0, 30)
-cooldownFrame.Position = UDim2.new(0, 10, 0.5, 0)
-cooldownFrame.BackgroundTransparency = 1
-cooldownFrame.Parent = gui
-
--- Create skill indicators
-for i = 1, 4 do
-    local skillIndicator = Instance.new("Frame")
-    skillIndicator.Name = "Skill"..i.."Indicator"
-    skillIndicator.Size = UDim2.new(0, 25, 0, 25)
-    skillIndicator.Position = UDim2.new(0, (i-1) * 30, 0, 0)
-    skillIndicator.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    skillIndicator.Parent = cooldownFrame
-    
-    local skillLabel = Instance.new("TextLabel")
-    skillLabel.Size = UDim2.new(1, 0, 1, 0)
-    skillLabel.Text = i
-    skillLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    skillLabel.BackgroundTransparency = 1
-    skillLabel.Parent = skillIndicator
-    
-    local skillCorner = Instance.new("UICorner")
-    skillCorner.CornerRadius = UDim.new(0, 5)
-    skillCorner.Parent = skillIndicator
-end
-
--- Update cooldown indicators
-local function updateCooldowns()
-    if not isAutoSkillEnabled then return end
-    
-    local currentTime = tick()
+-- Player selection function (add this to your existing player selection code)
+local function selectTarget(plr)
+    targetPlayer = plr
+    -- Reset skill timers when new target is selected
     for i = 1, 4 do
-        local indicator = cooldownFrame:FindFirstChild("Skill"..i.."Indicator")
-        if indicator then
-            local timeLeft = SKILLS[i].cooldown - (currentTime - SKILLS[i].lastUsed)
-            if timeLeft > 0 then
-                indicator.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-            else
-                indicator.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-            end
-        end
+        lastSkillUse[i] = 0
     end
 end
 
--- Connect cooldown updates
-RunService.RenderStepped:Connect(updateCooldowns)
-
--- Clean up
-script.Destroyed:Connect(function()
+-- Cleanup
+gui.Destroying:Connect(function()
     if skillConnection then
         skillConnection:Disconnect()
     end
+end)
+
+-- Error handling for character respawn
+player.CharacterAdded:Connect(function(newCharacter)
+    character = newCharacter
+    humanoid = character:WaitForChild("Humanoid")
 end)
