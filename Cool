@@ -1,6 +1,7 @@
 -- Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
 -- Variables
 local player = Players.LocalPlayer
@@ -11,6 +12,12 @@ local DISTANCE = 10
 local isEnabled = false
 local isAimbotEnabled = false
 
+-- Zoom variables
+local MIN_ZOOM = 5
+local MAX_ZOOM = 50
+local currentZoom = 20
+local ZOOM_SPEED = 2
+
 -- Create ScreenGui
 local gui = Instance.new("ScreenGui")
 gui.Name = "TeleportAndAimGUI"
@@ -19,7 +26,7 @@ gui.ResetOnSpawn = false
 -- Create main frame
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 200, 0, 300) -- Increased height for new button
+mainFrame.Size = UDim2.new(0, 200, 0, 300)
 mainFrame.Position = UDim2.new(0.8, 0, 0.5, -150)
 mainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 mainFrame.BorderSizePixel = 0
@@ -62,7 +69,7 @@ local listCorner = Instance.new("UICorner")
 listCorner.CornerRadius = UDim.new(0, 10)
 listCorner.Parent = playerList
 
--- Create toggle button for Teleport
+-- Create toggle buttons
 local toggleButton = Instance.new("TextButton")
 toggleButton.Name = "ToggleButton"
 toggleButton.Size = UDim2.new(0.9, 0, 0, 40)
@@ -74,7 +81,6 @@ toggleButton.TextSize = 18
 toggleButton.Font = Enum.Font.GothamBold
 toggleButton.Parent = mainFrame
 
--- Create toggle button for Aimbot
 local aimToggleButton = Instance.new("TextButton")
 aimToggleButton.Name = "AimToggleButton"
 aimToggleButton.Size = UDim2.new(0.9, 0, 0, 40)
@@ -94,6 +100,19 @@ buttonCorner.Parent = toggleButton
 local aimButtonCorner = Instance.new("UICorner")
 aimButtonCorner.CornerRadius = UDim.new(0, 10)
 aimButtonCorner.Parent = aimToggleButton
+
+-- Handle zoom function
+local function handleZoom()
+    UserInputService.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseWheel then
+            if input.Position.Z > 0 then
+                currentZoom = math.max(MIN_ZOOM, currentZoom - ZOOM_SPEED)
+            else
+                currentZoom = math.min(MAX_ZOOM, currentZoom + ZOOM_SPEED)
+            end
+        end
+    end)
+end
 
 -- Function to update player list
 local function updatePlayerList()
@@ -149,17 +168,24 @@ local function aimAtTarget()
     
     local targetHead = targetPlayer.Character:FindFirstChild("Head")
     local playerHead = player.Character:FindFirstChild("Head")
+    local playerHumanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
     
-    if targetHead and playerHead then
+    if targetHead and playerHead and playerHumanoidRootPart then
         local camera = workspace.CurrentCamera
         local targetPos = targetHead.Position
         local playerPos = playerHead.Position
         
-        -- Calculate direction to target
-        local direction = CFrame.new(playerPos, targetPos)
+        -- Tính toán vector hướng từ player đến target
+        local lookVector = (targetPos - playerPos).Unit
         
-        -- Set camera CFrame
-        camera.CFrame = direction
+        -- Tạo CFrame mới cho nhân vật, luôn hướng về target
+        playerHumanoidRootPart.CFrame = CFrame.lookAt(playerHumanoidRootPart.Position, targetPos)
+        
+        -- Tính toán vị trí camera với zoom
+        local cameraPos = playerPos - lookVector * currentZoom
+        
+        -- Đặt camera
+        camera.CFrame = CFrame.new(cameraPos, targetPos)
     end
 end
 
@@ -227,17 +253,6 @@ local function toggleAimbot()
     end
 end
 
--- Connect buttons
-toggleButton.MouseButton1Click:Connect(toggleTeleport)
-aimToggleButton.MouseButton1Click:Connect(toggleAimbot)
-
--- Update player list when players join/leave
-Players.PlayerAdded:Connect(updatePlayerList)
-Players.PlayerRemoving:Connect(updatePlayerList)
-
--- Initial player list update
-updatePlayerList()
-
 -- Make GUI draggable
 local dragging
 local dragInput
@@ -270,11 +285,25 @@ mainFrame.InputChanged:Connect(function(input)
     end
 end)
 
-game:GetService("UserInputService").InputChanged:Connect(function(input)
+UserInputService.InputChanged:Connect(function(input)
     if input == dragInput and dragging then
         update(input)
     end
 end)
+
+-- Connect buttons
+toggleButton.MouseButton1Click:Connect(toggleTeleport)
+aimToggleButton.MouseButton1Click:Connect(toggleAimbot)
+
+-- Initialize zoom handling
+handleZoom()
+
+-- Update player list when players join/leave
+Players.PlayerAdded:Connect(updatePlayerList)
+Players.PlayerRemoving:Connect(updatePlayerList)
+
+-- Initial player list update
+updatePlayerList()
 
 -- Parent GUI to PlayerGui
 gui.Parent = player:WaitForChild("PlayerGui")
