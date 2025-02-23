@@ -19,12 +19,41 @@ local MAX_ZOOM = 50
 local currentZoom = 20
 local ZOOM_SPEED = 2
 
--- Create ScreenGui
+-- Test function để tạo mục tiêu test
+local function createTestTarget()
+    local testModel = Instance.new("Model")
+    testModel.Name = "TestTarget"
+    
+    local humanoid = Instance.new("Humanoid")
+    humanoid.Parent = testModel
+    humanoid.Health = 15
+    
+    local head = Instance.new("Part")
+    head.Name = "Head"
+    head.Size = Vector3.new(2, 1, 1)
+    head.Position = Vector3.new(0, 5, 0)
+    head.BrickColor = BrickColor.new("Bright red")
+    head.Parent = testModel
+    
+    local torso = Instance.new("Part")
+    torso.Name = "HumanoidRootPart"
+    torso.Size = Vector3.new(2, 2, 1)
+    torso.Position = Vector3.new(0, 3, 0)
+    torso.BrickColor = BrickColor.new("Bright blue")
+    torso.Parent = testModel
+    
+    testModel.PrimaryPart = torso
+    testModel.Parent = workspace
+    
+    return testModel
+end
+
+-- Create GUI
 local gui = Instance.new("ScreenGui")
-gui.Name = "TeleportAndAimGUI"
+gui.Name = "LowHealthTargeterGUI"
 gui.ResetOnSpawn = false
 
--- Create main frame
+-- Main frame
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
 mainFrame.Size = UDim2.new(0, 200, 0, 300)
@@ -38,7 +67,7 @@ local corner = Instance.new("UICorner")
 corner.CornerRadius = UDim.new(0, 10)
 corner.Parent = mainFrame
 
--- Create title
+-- Title
 local title = Instance.new("TextLabel")
 title.Name = "Title"
 title.Size = UDim2.new(1, 0, 0, 30)
@@ -55,7 +84,7 @@ local titleCorner = Instance.new("UICorner")
 titleCorner.CornerRadius = UDim.new(0, 10)
 titleCorner.Parent = title
 
--- Create target list
+-- Target list
 local targetList = Instance.new("ScrollingFrame")
 targetList.Name = "TargetList"
 targetList.Size = UDim2.new(0.9, 0, 0.5, 0)
@@ -70,7 +99,7 @@ local listCorner = Instance.new("UICorner")
 listCorner.CornerRadius = UDim.new(0, 10)
 listCorner.Parent = targetList
 
--- Create toggle buttons
+-- Toggle buttons
 local toggleButton = Instance.new("TextButton")
 toggleButton.Name = "ToggleButton"
 toggleButton.Size = UDim2.new(0.9, 0, 0, 40)
@@ -102,7 +131,19 @@ local aimButtonCorner = Instance.new("UICorner")
 aimButtonCorner.CornerRadius = UDim.new(0, 10)
 aimButtonCorner.Parent = aimToggleButton
 
--- Handle zoom function
+-- Status label
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Name = "StatusLabel"
+statusLabel.Size = UDim2.new(0.9, 0, 0, 20)
+statusLabel.Position = UDim2.new(0.05, 0, 0.65, 0)
+statusLabel.BackgroundTransparency = 1
+statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+statusLabel.Text = "No target selected"
+statusLabel.TextSize = 14
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.Parent = mainFrame
+
+-- Functions
 local function handleZoom()
     UserInputService.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseWheel then
@@ -115,24 +156,26 @@ local function handleZoom()
     end)
 end
 
--- Function to find objects with Humanoid and low health
 local function findLowHealthTargets()
     local lowHealthTargets = {}
     
-    -- Search in workspace for models with Humanoids
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("Model") then
-            local humanoid = obj:FindFirstChild("Humanoid")
-            if humanoid and humanoid.Health < LOW_HEALTH_THRESHOLD and humanoid.Health > 0 then
-                table.insert(lowHealthTargets, obj)
+    local function searchInModel(model)
+        for _, obj in pairs(model:GetChildren()) do
+            if obj:IsA("Model") then
+                local humanoid = obj:FindFirstChild("Humanoid")
+                local rootPart = obj:FindFirstChild("HumanoidRootPart")
+                if humanoid and rootPart and humanoid.Health < LOW_HEALTH_THRESHOLD and humanoid.Health > 0 then
+                    table.insert(lowHealthTargets, obj)
+                end
+                searchInModel(obj)
             end
         end
     end
     
+    searchInModel(workspace)
     return lowHealthTargets
 end
 
--- Function to update target list
 local function updateTargetList()
     for _, child in pairs(targetList:GetChildren()) do
         if child:IsA("TextButton") then
@@ -155,13 +198,26 @@ local function updateTargetList()
             button.TextSize = 14
             button.Font = Enum.Font.Gotham
             button.Parent = targetList
+            button.ZIndex = 2
             
-            local targetButtonCorner = Instance.new("UICorner")
-            targetButtonCorner.CornerRadius = UDim.new(0, 5)
-            targetButtonCorner.Parent = button
+            local buttonCorner = Instance.new("UICorner")
+            buttonCorner.CornerRadius = UDim.new(0, 5)
+            buttonCorner.Parent = button
+            
+            button.MouseEnter:Connect(function()
+                button.BackgroundColor3 = Color3.fromRGB(75, 75, 75)
+            end)
+            
+            button.MouseLeave:Connect(function()
+                if targetObject ~= target then
+                    button.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
+                end
+            end)
             
             button.MouseButton1Click:Connect(function()
                 targetObject = target
+                statusLabel.Text = "Target: " .. target.Name
+                
                 for _, btn in pairs(targetList:GetChildren()) do
                     if btn:IsA("TextButton") then
                         btn.BackgroundColor3 = btn == button and Color3.fromRGB(0, 120, 255) or Color3.fromRGB(55, 55, 55)
@@ -176,12 +232,10 @@ local function updateTargetList()
     targetList.CanvasSize = UDim2.new(0, 0, 0, yPosition)
 end
 
--- Function to get position behind target
 local function getPositionBehindTarget(targetCFrame)
     return targetCFrame * CFrame.new(0, 0, DISTANCE)
 end
 
--- Function to aim at target
 local function aimAtTarget()
     if not targetObject or not player.Character then
         return
@@ -192,30 +246,23 @@ local function aimAtTarget()
     local playerHead = player.Character:FindFirstChild("Head")
     local playerHumanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
     
-    if targetHead and playerHead and playerHumanoidRootPart and targetHumanoid and targetHumanoid.Health > 0 then
+    if targetHead and playerHead and playerHumanoidRootPart and targetHumanoid and targetHumanoid.Health > 0 and targetHumanoid.Health < LOW_HEALTH_THRESHOLD then
         local camera = workspace.CurrentCamera
         local targetPos = targetHead.Position
         local playerPos = playerHead.Position
         
-        -- Calculate direction vector from player to target
         local lookVector = (targetPos - playerPos).Unit
-        
-        -- Create new CFrame for character, always facing target
         playerHumanoidRootPart.CFrame = CFrame.lookAt(playerHumanoidRootPart.Position, targetPos)
         
-        -- Calculate camera position with zoom
         local cameraPos = playerPos - lookVector * currentZoom
-        
-        -- Set camera
         camera.CFrame = CFrame.new(cameraPos, targetPos)
     else
-        -- If target is dead or invalid, clear target
         targetObject = nil
+        statusLabel.Text = "Target lost"
         updateTargetList()
     end
 end
 
--- Toggle teleport function
 local function toggleTeleport()
     isEnabled = not isEnabled
     
@@ -233,13 +280,13 @@ local function toggleTeleport()
                 local targetRoot = targetObject:FindFirstChild("HumanoidRootPart")
                 local playerRoot = player.Character:FindFirstChild("HumanoidRootPart")
                 
-                if targetRoot and playerRoot and targetHumanoid and targetHumanoid.Health > 0 then
+                if targetRoot and playerRoot and targetHumanoid and targetHumanoid.Health > 0 and targetHumanoid.Health < LOW_HEALTH_THRESHOLD then
                     local newPosition = getPositionBehindTarget(targetRoot.CFrame)
                     playerRoot.CFrame = newPosition
                 else
-                    -- If target is dead or invalid, stop following
                     toggleTeleport()
                     targetObject = nil
+                    statusLabel.Text = "Target lost"
                     updateTargetList()
                 end
             end)
@@ -258,7 +305,6 @@ local function toggleTeleport()
     end
 end
 
--- Toggle aimbot function
 local function toggleAimbot()
     isAimbotEnabled = not isAimbotEnabled
     
@@ -327,13 +373,39 @@ end)
 toggleButton.MouseButton1Click:Connect(toggleTeleport)
 aimToggleButton.MouseButton1Click:Connect(toggleAimbot)
 
--- Initialize zoom handling
+-- Initialize
 handleZoom()
 
+-- Create test target
+local testTarget = createTestTarget()
+
 -- Update target list periodically
-local updateConnection = RunService.Heartbeat:Connect(function()
-    updateTargetList()
-    wait(1) -- Update every second
+local lastUpdate = 0
+local UPDATE_INTERVAL = 1
+
+RunService.Heartbeat:Connect(function()
+    local currentTime = tick()
+    if currentTime - lastUpdate >= UPDATE_INTERVAL then
+        updateTargetList()
+        lastUpdate = currentTime
+        
+        -- Cập nhật trạng thái nếu mục tiêu không còn hợp lệ
+        if targetObject then
+            local humanoid = targetObject:FindFirstChild("Humanoid")
+            if not humanoid or humanoid.Health >= LOW_HEALTH_THRESHOLD or humanoid.Health <= 0 then
+                targetObject = nil
+                statusLabel.Text = "Target lost - HP changed"
+                
+                -- Reset trạng thái các nút
+                if isEnabled then
+                    toggleTeleport()
+                end
+                if isAimbotEnabled then
+                    toggleAimbot()
+                end
+            end
+        end
+    end
 end)
 
 -- Parent GUI to PlayerGui
@@ -347,8 +419,95 @@ script.Destroyed:Connect(function()
     if aimConnection then
         aimConnection:Disconnect()
     end
-    if updateConnection then
-        updateConnection:Disconnect()
+    if testTarget and testTarget.Parent then
+        testTarget:Destroy()
     end
     gui:Destroy()
 end)
+
+-- Thêm nút Close để tắt GUI
+local closeButton = Instance.new("TextButton")
+closeButton.Name = "CloseButton"
+closeButton.Size = UDim2.new(0, 20, 0, 20)
+closeButton.Position = UDim2.new(1, -25, 0, 5)
+closeButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.Text = "X"
+closeButton.TextSize = 14
+closeButton.Font = Enum.Font.GothamBold
+closeButton.Parent = mainFrame
+closeButton.ZIndex = 3
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 5)
+closeCorner.Parent = closeButton
+
+closeButton.MouseButton1Click:Connect(function()
+    if connection then
+        connection:Disconnect()
+    end
+    if aimConnection then
+        aimConnection:Disconnect()
+    end
+    gui:Destroy()
+end)
+
+-- Thêm tooltip hiển thị thông tin
+local tooltip = Instance.new("TextLabel")
+tooltip.Name = "Tooltip"
+tooltip.Size = UDim2.new(0, 150, 0, 25)
+tooltip.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+tooltip.TextColor3 = Color3.fromRGB(255, 255, 255)
+tooltip.Text = ""
+tooltip.TextSize = 12
+tooltip.Font = Enum.Font.Gotham
+tooltip.Visible = false
+tooltip.ZIndex = 10
+tooltip.Parent = gui
+
+local tooltipCorner = Instance.new("UICorner")
+tooltipCorner.CornerRadius = UDim.new(0, 5)
+tooltipCorner.Parent = tooltip
+
+-- Hiển thị tooltip khi hover
+local function showTooltip(button, text)
+    button.MouseEnter:Connect(function()
+        tooltip.Text = text
+        tooltip.Position = UDim2.new(0, button.AbsolutePosition.X + button.AbsoluteSize.X + 5,
+                                   0, button.AbsolutePosition.Y)
+        tooltip.Visible = true
+    end)
+    
+    button.MouseLeave:Connect(function()
+        tooltip.Visible = false
+    end)
+end
+
+-- Thêm tooltip cho các nút
+showTooltip(toggleButton, "Follow selected target")
+showTooltip(aimToggleButton, "Automatically aim at target")
+showTooltip(closeButton, "Close GUI")
+
+-- Thêm thanh tiêu đề hiển thị thông tin
+local infoLabel = Instance.new("TextLabel")
+infoLabel.Name = "InfoLabel"
+infoLabel.Size = UDim2.new(0.9, 0, 0, 20)
+infoLabel.Position = UDim2.new(0.05, 0, 0, 35)
+infoLabel.BackgroundTransparency = 1
+infoLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+infoLabel.Text = string.format("Threshold: %d HP | Zoom: %.0f", LOW_HEALTH_THRESHOLD, currentZoom)
+infoLabel.TextSize = 12
+infoLabel.Font = Enum.Font.Gotham
+infoLabel.Parent = mainFrame
+
+-- Cập nhật thông tin zoom khi thay đổi
+UserInputService.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseWheel then
+        infoLabel.Text = string.format("Threshold: %d HP | Zoom: %.0f", LOW_HEALTH_THRESHOLD, currentZoom)
+    end
+end)
+
+-- Thông báo khi script được load thành công
+print("Low HP Targeter loaded successfully!")
+print("Created by: " .. Players.LocalPlayer.Name)
+print("Current time: " .. os.date("%Y-%m-%d %H:%M:%S"))
