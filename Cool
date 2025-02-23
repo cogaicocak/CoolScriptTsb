@@ -1,3 +1,10 @@
+-- Script Info
+local SCRIPT_INFO = {
+    author = "AnhBaDepTrai",
+    created = "2025-02-23 13:59:10 UTC",
+    version = "1.0.0"
+}
+
 -- Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -19,33 +26,43 @@ local MAX_ZOOM = 50
 local currentZoom = 20
 local ZOOM_SPEED = 2
 
--- Test function để tạo mục tiêu test
-local function createTestTarget()
-    local testModel = Instance.new("Model")
-    testModel.Name = "TestTarget"
-    
-    local humanoid = Instance.new("Humanoid")
-    humanoid.Parent = testModel
-    humanoid.Health = 15
-    
-    local head = Instance.new("Part")
-    head.Name = "Head"
-    head.Size = Vector3.new(2, 1, 1)
-    head.Position = Vector3.new(0, 5, 0)
-    head.BrickColor = BrickColor.new("Bright red")
-    head.Parent = testModel
-    
-    local torso = Instance.new("Part")
-    torso.Name = "HumanoidRootPart"
-    torso.Size = Vector3.new(2, 2, 1)
-    torso.Position = Vector3.new(0, 3, 0)
-    torso.BrickColor = BrickColor.new("Bright blue")
-    torso.Parent = testModel
-    
-    testModel.PrimaryPart = torso
-    testModel.Parent = workspace
-    
-    return testModel
+-- Function tạo đối tượng test
+local function createTestTargets()
+    for i = 1, 3 do
+        local testModel = Instance.new("Model")
+        testModel.Name = "TestTarget_" .. i
+        
+        local humanoid = Instance.new("Humanoid")
+        humanoid.Health = math.random(5, 15)
+        humanoid.Parent = testModel
+        
+        local head = Instance.new("Part")
+        head.Name = "Head"
+        head.Size = Vector3.new(2, 1, 1)
+        head.Position = Vector3.new(i * 5, 5, 0)
+        head.BrickColor = BrickColor.new("Bright red")
+        head.Parent = testModel
+        
+        local torso = Instance.new("Part")
+        torso.Name = "HumanoidRootPart"
+        torso.Size = Vector3.new(2, 2, 1)
+        torso.Position = Vector3.new(i * 5, 3, 0)
+        torso.BrickColor = BrickColor.new("Bright blue")
+        torso.Parent = testModel
+        
+        testModel.PrimaryPart = torso
+        testModel.Parent = workspace
+        
+        -- Auto change HP
+        spawn(function()
+            while wait(math.random(3, 7)) do
+                if humanoid and humanoid.Parent then
+                    humanoid.Health = math.random(5, 25)
+                    print(string.format("[%s] HP changed to %.1f", testModel.Name, humanoid.Health))
+                end
+            end
+        end)
+    end
 end
 
 -- Create GUI
@@ -62,7 +79,7 @@ mainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 mainFrame.BorderSizePixel = 0
 mainFrame.Parent = gui
 
--- Add rounded corners
+-- Add corners
 local corner = Instance.new("UICorner")
 corner.CornerRadius = UDim.new(0, 10)
 corner.Parent = mainFrame
@@ -79,7 +96,6 @@ title.TextSize = 18
 title.Font = Enum.Font.GothamBold
 title.Parent = mainFrame
 
--- Add corner to title
 local titleCorner = Instance.new("UICorner")
 titleCorner.CornerRadius = UDim.new(0, 10)
 titleCorner.Parent = title
@@ -94,10 +110,21 @@ targetList.BorderSizePixel = 0
 targetList.ScrollBarThickness = 4
 targetList.Parent = mainFrame
 
--- Add corner to target list
 local listCorner = Instance.new("UICorner")
 listCorner.CornerRadius = UDim.new(0, 10)
 listCorner.Parent = targetList
+
+-- Status label
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Name = "StatusLabel"
+statusLabel.Size = UDim2.new(0.9, 0, 0, 20)
+statusLabel.Position = UDim2.new(0.05, 0, 0.65, 0)
+statusLabel.BackgroundTransparency = 1
+statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+statusLabel.Text = "No target selected"
+statusLabel.TextSize = 14
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.Parent = mainFrame
 
 -- Toggle buttons
 local toggleButton = Instance.new("TextButton")
@@ -131,59 +158,28 @@ local aimButtonCorner = Instance.new("UICorner")
 aimButtonCorner.CornerRadius = UDim.new(0, 10)
 aimButtonCorner.Parent = aimToggleButton
 
--- Status label
-local statusLabel = Instance.new("TextLabel")
-statusLabel.Name = "StatusLabel"
-statusLabel.Size = UDim2.new(0.9, 0, 0, 20)
-statusLabel.Position = UDim2.new(0.05, 0, 0.65, 0)
-statusLabel.BackgroundTransparency = 1
-statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-statusLabel.Text = "No target selected"
-statusLabel.TextSize = 14
-statusLabel.Font = Enum.Font.Gotham
-statusLabel.Parent = mainFrame
-
 -- Functions
-local function handleZoom()
-    UserInputService.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseWheel then
-            if input.Position.Z > 0 then
-                currentZoom = math.max(MIN_ZOOM, currentZoom - ZOOM_SPEED)
-            else
-                currentZoom = math.min(MAX_ZOOM, currentZoom + ZOOM_SPEED)
-            end
-        end
-    end)
-end
-
--- Function để tìm các đối tượng có máu dưới 20
 local function findLowHealthTargets()
     local lowHealthTargets = {}
+    print("[Search] Looking for targets...")
     
-    -- Tìm trong tất cả các instance trong workspace
-    for _, instance in pairs(workspace:GetDescendants()) do
-        -- Kiểm tra nếu instance có Humanoid
-        local humanoid = instance:FindFirstChild("Humanoid")
-        if humanoid and instance:FindFirstChild("HumanoidRootPart") then
-            -- Debug để kiểm tra
-            print("Found humanoid in:", instance.Name, "with health:", humanoid.Health)
+    for _, obj in pairs(workspace:GetDescendants()) do
+        local humanoid = obj:FindFirstChild("Humanoid")
+        if humanoid then
+            print(string.format("[Found] %s with HP: %.1f", obj.Name, humanoid.Health))
             
-            -- Kiểm tra điều kiện máu
-            if humanoid.Health > 0 and humanoid.Health < LOW_HEALTH_THRESHOLD then
-                print("Adding target:", instance.Name, "Health:", humanoid.Health)
-                table.insert(lowHealthTargets, instance)
+            if humanoid.Health < LOW_HEALTH_THRESHOLD and humanoid.Health > 0 then
+                table.insert(lowHealthTargets, obj)
+                print(string.format("[Added] Target: %s (HP: %.1f)", obj.Name, humanoid.Health))
             end
         end
     end
     
-    -- In ra số lượng mục tiêu tìm thấy
-    print("Total targets found:", #lowHealthTargets)
+    print(string.format("[Summary] Found %d targets below %d HP", #lowHealthTargets, LOW_HEALTH_THRESHOLD))
     return lowHealthTargets
 end
 
--- Cập nhật danh sách mục tiêu thường xuyên hơn
 local function updateTargetList()
-    -- Xóa các button cũ
     for _, child in pairs(targetList:GetChildren()) do
         if child:IsA("TextButton") then
             child:Destroy()
@@ -192,29 +188,68 @@ local function updateTargetList()
     
     local yPosition = 5
     local targets = findLowHealthTargets()
+    statusLabel.Text = string.format("Found %d targets", #targets)
     
-    -- Hiển thị thông báo nếu không tìm thấy mục tiêu
-    if #targets == 0 then
-        local noTargetLabel = Instance.new("TextLabel")
-        noTargetLabel.Size = UDim2.new(0.9, 0, 0, 30)
-        noTargetLabel.Position = UDim2.new(0.05, 0, 0, yPosition)
-        noTargetLabel.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
+    for _, target in pairs(targets) do
+        local humanoid = target:FindFirstChild("Humanoid")
+        if humanoid then
+            local button = Instance.new("TextButton")
+            button.Size = UDim2.new(0.9, 0, 0, 30)
+            button.Position = UDim2.new(0.05, 0, 0, yPosition)
+            button.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
+            button.TextColor3 = Color3.fromRGB(255, 255, 255)
+            button.Text = string.format("%s (HP: %.1f)", target.Name, humanoid.Health)
+            button.TextSize = 14
+            button.Font = Enum.Font.Gotham
+            button.Parent = targetList
+            button.ZIndex = 2
+            
+            local buttonCorner = Instance.new("UICorner")
+            buttonCorner.CornerRadius = UDim.new(0, 5)
+            buttonCorner.Parent = button
+            
+            button.MouseEnter:Connect(function()
+                button.BackgroundColor3 = Color3.fromRGB(75, 75, 75)
+            end)
+            
+            button.MouseLeave:Connect(function()
+                if targetObject ~= target then
+                    button.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
+                end
+            end)
+            
+            button.MouseButton1Click:Connect(function()
+                targetObject = target
+                statusLabel.Text = string.format("Selected: %s (HP: %.1f)", target.Name, humanoid.Health)
+                
+                for _, btn in pairs(targetList:GetChildren()) do
+                    if btn:IsA("TextButton") then
+                        btn.BackgroundColor3 = btn == button and Color3.fromRGB(0, 120, 255) or Color3.fromRGB(55, 55, 55)
+                    end
+                end
+            end)
+            
+            yPosition = yPosition + 35
+        end
+    end
+    
+    targetList.CanvasSize = UDim2.new(0, 0, 0, yPosition)
+end
 
 local function getPositionBehindTarget(targetCFrame)
     return targetCFrame * CFrame.new(0, 0, DISTANCE)
 end
 
 local function aimAtTarget()
-    if not targetObject or not player.Character then
-        return
-    end
+    if not targetObject or not player.Character then return end
     
     local targetHumanoid = targetObject:FindFirstChild("Humanoid")
     local targetHead = targetObject:FindFirstChild("Head")
     local playerHead = player.Character:FindFirstChild("Head")
     local playerHumanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
     
-    if targetHead and playerHead and playerHumanoidRootPart and targetHumanoid and targetHumanoid.Health > 0 and targetHumanoid.Health < LOW_HEALTH_THRESHOLD then
+    if targetHead and playerHead and playerHumanoidRootPart and 
+       targetHumanoid and targetHumanoid.Health > 0 and targetHumanoid.Health < LOW_HEALTH_THRESHOLD then
         local camera = workspace.CurrentCamera
         local targetPos = targetHead.Position
         local playerPos = playerHead.Position
@@ -240,15 +275,14 @@ local function toggleTeleport()
             toggleButton.Text = "STOP FOLLOW"
             
             connection = RunService.Heartbeat:Connect(function()
-                if not targetObject or not player.Character then
-                    return
-                end
+                if not targetObject or not player.Character then return end
                 
                 local targetHumanoid = targetObject:FindFirstChild("Humanoid")
                 local targetRoot = targetObject:FindFirstChild("HumanoidRootPart")
                 local playerRoot = player.Character:FindFirstChild("HumanoidRootPart")
                 
-                if targetRoot and playerRoot and targetHumanoid and targetHumanoid.Health > 0 and targetHumanoid.Health < LOW_HEALTH_THRESHOLD then
+                if targetRoot and playerRoot and targetHumanoid and 
+                   targetHumanoid.Health > 0 and targetHumanoid.Health < LOW_HEALTH_THRESHOLD then
                     local newPosition = getPositionBehindTarget(targetRoot.CFrame)
                     playerRoot.CFrame = newPosition
                 else
@@ -326,7 +360,8 @@ mainFrame.InputBegan:Connect(function(input)
 end)
 
 mainFrame.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+    if input.UserInputType == Enum.UserInputType.MouseMovement or
+       input.UserInputType == Enum.UserInputType.Touch then
         dragInput = input
     end
 end)
@@ -337,63 +372,34 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- Connect buttons
-toggleButton.MouseButton1Click:Connect(toggleTeleport)
-aimToggleButton.MouseButton1Click:Connect(toggleAimbot)
-
--- Initialize
-handleZoom()
-
--- Create test target
-local testTarget = createTestTarget()
-
--- Update target list periodically
-local lastUpdate = 0
-local UPDATE_INTERVAL = 1
-
-RunService.Heartbeat:Connect(function()
-    local currentTime = tick()
-    if currentTime - lastUpdate >= UPDATE_INTERVAL then
-        updateTargetList()
-        lastUpdate = currentTime
-        
-        -- Cập nhật trạng thái nếu mục tiêu không còn hợp lệ
-        if targetObject then
-            local humanoid = targetObject:FindFirstChild("Humanoid")
-            if not humanoid or humanoid.Health >= LOW_HEALTH_THRESHOLD or humanoid.Health <= 0 then
-                targetObject = nil
-                statusLabel.Text = "Target lost - HP changed"
-                
-                -- Reset trạng thái các nút
-                if isEnabled then
-                    toggleTeleport()
-                end
-                if isAimbotEnabled then
-                    toggleAimbot()
-                end
+-- Handle zoom
+local function handleZoom()
+    UserInputService.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseWheel then
+            if input.Position.Z > 0 then
+                currentZoom = math.max(MIN_ZOOM, currentZoom - ZOOM_SPEED)
+            else
+                currentZoom = math.min(MAX_ZOOM, currentZoom + ZOOM_SPEED)
             end
+            -- Update zoom info
+            infoLabel.Text = string.format("Zoom: %.0f | Threshold: %d HP", currentZoom, LOW_HEALTH_THRESHOLD)
         end
-    end
-end)
+    end)
+end
 
--- Parent GUI to PlayerGui
-gui.Parent = player:WaitForChild("PlayerGui")
+-- Add info label
+local infoLabel = Instance.new("TextLabel")
+infoLabel.Name = "InfoLabel"
+infoLabel.Size = UDim2.new(0.9, 0, 0, 20)
+infoLabel.Position = UDim2.new(0.05, 0, 0, 35)
+infoLabel.BackgroundTransparency = 1
+infoLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+infoLabel.Text = string.format("Zoom: %.0f | Threshold: %d HP", currentZoom, LOW_HEALTH_THRESHOLD)
+infoLabel.TextSize = 12
+infoLabel.Font = Enum.Font.Gotham
+infoLabel.Parent = mainFrame
 
--- Cleanup on script destroy
-script.Destroyed:Connect(function()
-    if connection then
-        connection:Disconnect()
-    end
-    if aimConnection then
-        aimConnection:Disconnect()
-    end
-    if testTarget and testTarget.Parent then
-        testTarget:Destroy()
-    end
-    gui:Destroy()
-end)
-
--- Thêm nút Close để tắt GUI
+-- Add close button
 local closeButton = Instance.new("TextButton")
 closeButton.Name = "CloseButton"
 closeButton.Size = UDim2.new(0, 20, 0, 20)
@@ -410,72 +416,104 @@ local closeCorner = Instance.new("UICorner")
 closeCorner.CornerRadius = UDim.new(0, 5)
 closeCorner.Parent = closeButton
 
+-- Add credits
+local creditsLabel = Instance.new("TextLabel")
+creditsLabel.Name = "CreditsLabel"
+creditsLabel.Size = UDim2.new(0.9, 0, 0, 20)
+creditsLabel.Position = UDim2.new(0.05, 0, 0.95, 0)
+creditsLabel.BackgroundTransparency = 1
+creditsLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+creditsLabel.Text = "By " .. SCRIPT_INFO.author
+creditsLabel.TextSize = 12
+creditsLabel.Font = Enum.Font.Gotham
+creditsLabel.Parent = mainFrame
+
+-- Connect buttons
+toggleButton.MouseButton1Click:Connect(toggleTeleport)
+aimToggleButton.MouseButton1Click:Connect(toggleAimbot)
 closeButton.MouseButton1Click:Connect(function()
-    if connection then
-        connection:Disconnect()
-    end
-    if aimConnection then
-        aimConnection:Disconnect()
-    end
+    if connection then connection:Disconnect() end
+    if aimConnection then aimConnection:Disconnect() end
     gui:Destroy()
 end)
 
--- Thêm tooltip hiển thị thông tin
-local tooltip = Instance.new("TextLabel")
-tooltip.Name = "Tooltip"
-tooltip.Size = UDim2.new(0, 150, 0, 25)
-tooltip.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-tooltip.TextColor3 = Color3.fromRGB(255, 255, 255)
-tooltip.Text = ""
-tooltip.TextSize = 12
-tooltip.Font = Enum.Font.Gotham
-tooltip.Visible = false
-tooltip.ZIndex = 10
-tooltip.Parent = gui
+-- Initialize
+handleZoom()
 
-local tooltipCorner = Instance.new("UICorner")
-tooltipCorner.CornerRadius = UDim.new(0, 5)
-tooltipCorner.Parent = tooltip
+-- Create update connection with optimized timing
+local lastUpdate = 0
+local UPDATE_INTERVAL = 0.1 -- Update every 0.1 seconds
 
--- Hiển thị tooltip khi hover
-local function showTooltip(button, text)
-    button.MouseEnter:Connect(function()
-        tooltip.Text = text
-        tooltip.Position = UDim2.new(0, button.AbsolutePosition.X + button.AbsoluteSize.X + 5,
-                                   0, button.AbsolutePosition.Y)
-        tooltip.Visible = true
-    end)
-    
-    button.MouseLeave:Connect(function()
-        tooltip.Visible = false
-    end)
-end
-
--- Thêm tooltip cho các nút
-showTooltip(toggleButton, "Follow selected target")
-showTooltip(aimToggleButton, "Automatically aim at target")
-showTooltip(closeButton, "Close GUI")
-
--- Thêm thanh tiêu đề hiển thị thông tin
-local infoLabel = Instance.new("TextLabel")
-infoLabel.Name = "InfoLabel"
-infoLabel.Size = UDim2.new(0.9, 0, 0, 20)
-infoLabel.Position = UDim2.new(0.05, 0, 0, 35)
-infoLabel.BackgroundTransparency = 1
-infoLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-infoLabel.Text = string.format("Threshold: %d HP | Zoom: %.0f", LOW_HEALTH_THRESHOLD, currentZoom)
-infoLabel.TextSize = 12
-infoLabel.Font = Enum.Font.Gotham
-infoLabel.Parent = mainFrame
-
--- Cập nhật thông tin zoom khi thay đổi
-UserInputService.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseWheel then
-        infoLabel.Text = string.format("Threshold: %d HP | Zoom: %.0f", LOW_HEALTH_THRESHOLD, currentZoom)
+local updateConnection = RunService.Heartbeat:Connect(function()
+    local currentTime = tick()
+    if currentTime - lastUpdate >= UPDATE_INTERVAL then
+        updateTargetList()
+        lastUpdate = currentTime
+        
+        -- Check if target is still valid
+        if targetObject then
+            local humanoid = targetObject:FindFirstChild("Humanoid")
+            if not humanoid or humanoid.Health >= LOW_HEALTH_THRESHOLD or humanoid.Health <= 0 then
+                targetObject = nil
+                statusLabel.Text = "Target lost - HP changed"
+                
+                -- Reset buttons if needed
+                if isEnabled then
+                    toggleTeleport()
+                end
+                if isAimbotEnabled then
+                    toggleAimbot()
+                end
+            end
+        end
     end
 end)
 
--- Thông báo khi script được load thành công
-print("Low HP Targeter loaded successfully!")
-print("Created by: " .. Players.LocalPlayer.Name)
-print("Current time: " .. os.date("%Y-%m-%d %H:%M:%S"))
+-- Create test targets for debugging
+createTestTargets()
+
+-- Parent GUI to PlayerGui
+gui.Parent = player:WaitForChild("PlayerGui")
+
+-- Cleanup on script destroy
+script.Destroyed:Connect(function()
+    print("[Cleanup] Script shutting down...")
+    
+    if connection then
+        connection:Disconnect()
+        print("[Cleanup] Follow connection disconnected")
+    end
+    
+    if aimConnection then
+        aimConnection:Disconnect()
+        print("[Cleanup] Aim connection disconnected")
+    end
+    
+    if updateConnection then
+        updateConnection:Disconnect()
+        print("[Cleanup] Update connection disconnected")
+    end
+    
+    -- Remove test targets if they exist
+    for _, obj in pairs(workspace:GetChildren()) do
+        if obj.Name:match("^TestTarget_") then
+            obj:Destroy()
+            print("[Cleanup] Removed test target: " .. obj.Name)
+        end
+    end
+    
+    gui:Destroy()
+    print("[Cleanup] GUI removed")
+    print(string.format("[Cleanup] Script terminated at %s", os.date("%Y-%m-%d %H:%M:%S")))
+end)
+
+-- Print startup information
+print(string.format([[
+Low HP Targeter Started
+----------------------
+Author: %s
+Version: %s
+Created: %s
+Started: %s
+----------------------
+]], SCRIPT_INFO.author, SCRIPT_INFO.version, SCRIPT_INFO.created, os.date("%Y-%m-%d %H:%M:%S")))
