@@ -1,7 +1,7 @@
 -- Script Info
 local SCRIPT_INFO = {
     author = "AnhBaDepTrai",
-    created = "2025-02-23 13:59:10 UTC",
+    created = "2025-02-24 01:03:08 UTC",
     version = "1.0.0"
 }
 
@@ -12,6 +12,7 @@ local UserInputService = game:GetService("UserInputService")
 
 -- Variables
 local player = Players.LocalPlayer
+local connections = {} -- Store all connections for cleanup
 local connection = nil
 local aimConnection = nil
 local targetObject = nil
@@ -26,7 +27,7 @@ local MAX_ZOOM = 50
 local currentZoom = 20
 local ZOOM_SPEED = 2
 
--- Function tạo đối tượng test
+-- Function to create test targets
 local function createTestTargets()
     for i = 1, 3 do
         local testModel = Instance.new("Model")
@@ -100,6 +101,18 @@ local titleCorner = Instance.new("UICorner")
 titleCorner.CornerRadius = UDim.new(0, 10)
 titleCorner.Parent = title
 
+-- Add info label
+local infoLabel = Instance.new("TextLabel")
+infoLabel.Name = "InfoLabel"
+infoLabel.Size = UDim2.new(0.9, 0, 0, 20)
+infoLabel.Position = UDim2.new(0.05, 0, 0, 35)
+infoLabel.BackgroundTransparency = 1
+infoLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+infoLabel.Text = string.format("Zoom: %.0f | Threshold: %d HP", currentZoom, LOW_HEALTH_THRESHOLD)
+infoLabel.TextSize = 12
+infoLabel.Font = Enum.Font.Gotham
+infoLabel.Parent = mainFrame
+
 -- Target list
 local targetList = Instance.new("ScrollingFrame")
 targetList.Name = "TargetList"
@@ -158,22 +171,55 @@ local aimButtonCorner = Instance.new("UICorner")
 aimButtonCorner.CornerRadius = UDim.new(0, 10)
 aimButtonCorner.Parent = aimToggleButton
 
+-- Add close button
+local closeButton = Instance.new("TextButton")
+closeButton.Name = "CloseButton"
+closeButton.Size = UDim2.new(0, 20, 0, 20)
+closeButton.Position = UDim2.new(1, -25, 0, 5)
+closeButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.Text = "X"
+closeButton.TextSize = 14
+closeButton.Font = Enum.Font.GothamBold
+closeButton.Parent = mainFrame
+closeButton.ZIndex = 3
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 5)
+closeCorner.Parent = closeButton
+
+-- Add credits
+local creditsLabel = Instance.new("TextLabel")
+creditsLabel.Name = "CreditsLabel"
+creditsLabel.Size = UDim2.new(0.9, 0, 0, 20)
+creditsLabel.Position = UDim2.new(0.05, 0, 0.95, 0)
+creditsLabel.BackgroundTransparency = 1
+creditsLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+creditsLabel.Text = "By " .. SCRIPT_INFO.author
+creditsLabel.TextSize = 12
+creditsLabel.Font = Enum.Font.Gotham
+creditsLabel.Parent = mainFrame
+
 -- Functions
 local function findLowHealthTargets()
     local lowHealthTargets = {}
     print("[Search] Looking for targets...")
     
-    for _, obj in pairs(workspace:GetDescendants()) do
-        local humanoid = obj:FindFirstChild("Humanoid")
-        if humanoid then
-            print(string.format("[Found] %s with HP: %.1f", obj.Name, humanoid.Health))
-            
-            if humanoid.Health < LOW_HEALTH_THRESHOLD and humanoid.Health > 0 then
-                table.insert(lowHealthTargets, obj)
-                print(string.format("[Added] Target: %s (HP: %.1f)", obj.Name, humanoid.Health))
+    pcall(function()
+        for _, obj in pairs(workspace:GetChildren()) do
+            if obj:IsA("Model") then
+                local humanoid = obj:FindFirstChild("Humanoid")
+                if humanoid then
+                    print(string.format("[Found] %s with HP: %.1f", obj.Name, humanoid.Health))
+                    
+                    if humanoid.Health < LOW_HEALTH_THRESHOLD and humanoid.Health > 0 then
+                        table.insert(lowHealthTargets, obj)
+                        print(string.format("[Added] Target: %s (HP: %.1f)", obj.Name, humanoid.Health))
+                    end
+                end
             end
         end
-    end
+    end)
     
     print(string.format("[Summary] Found %d targets below %d HP", #lowHealthTargets, LOW_HEALTH_THRESHOLD))
     return lowHealthTargets
@@ -208,17 +254,18 @@ local function updateTargetList()
             buttonCorner.CornerRadius = UDim.new(0, 5)
             buttonCorner.Parent = button
             
-            button.MouseEnter:Connect(function()
+            -- Store connections
+            local enterConnection = button.MouseEnter:Connect(function()
                 button.BackgroundColor3 = Color3.fromRGB(75, 75, 75)
             end)
             
-            button.MouseLeave:Connect(function()
+            local leaveConnection = button.MouseLeave:Connect(function()
                 if targetObject ~= target then
                     button.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
                 end
             end)
             
-            button.MouseButton1Click:Connect(function()
+            local clickConnection = button.MouseButton1Click:Connect(function()
                 targetObject = target
                 statusLabel.Text = string.format("Selected: %s (HP: %.1f)", target.Name, humanoid.Health)
                 
@@ -228,6 +275,11 @@ local function updateTargetList()
                     end
                 end
             end)
+            
+            -- Store connections for cleanup
+            table.insert(connections, enterConnection)
+            table.insert(connections, leaveConnection)
+            table.insert(connections, clickConnection)
             
             yPosition = yPosition + 35
         end
@@ -292,6 +344,7 @@ local function toggleTeleport()
                     updateTargetList()
                 end
             end)
+            table.insert(connections, connection)
         else
             isEnabled = false
             toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
@@ -318,6 +371,7 @@ local function toggleAimbot()
             aimConnection = RunService.RenderStepped:Connect(function()
                 aimAtTarget()
             end)
+            table.insert(connections, aimConnection)
         else
             isAimbotEnabled = false
             aimToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
@@ -333,6 +387,24 @@ local function toggleAimbot()
     end
 end
 
+-- Handle zoom
+local function handleZoom()
+    local connection = UserInputService.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseWheel then
+            if input.Position.Z > 0 then
+                currentZoom = math.max(MIN_ZOOM, currentZoom - ZOOM_SPEED)
+            else
+                currentZoom = math.min(MAX_ZOOM, currentZoom + ZOOM_SPEED)
+            end
+            -- Update zoom info with pcall for safety
+            pcall(function()
+                infoLabel.Text = string.format("Zoom: %.0f | Threshold: %d HP", currentZoom, LOW_HEALTH_THRESHOLD)
+            end)
+        end
+    end)
+    table.insert(connections, connection)
+end
+
 -- Make GUI draggable
 local dragging
 local dragInput
@@ -345,7 +417,7 @@ local function update(input)
         startPos.Y.Scale, startPos.Y.Offset + delta.Y)
 end
 
-mainFrame.InputBegan:Connect(function(input)
+local dragConnection = mainFrame.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         dragging = true
         dragStart = input.Position
@@ -358,80 +430,35 @@ mainFrame.InputBegan:Connect(function(input)
         end)
     end
 end)
+table.insert(connections, dragConnection)
 
-mainFrame.InputChanged:Connect(function(input)
+local inputChangedConnection = mainFrame.InputChanged:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseMovement or
        input.UserInputType == Enum.UserInputType.Touch then
         dragInput = input
     end
 end)
+table.insert(connections, inputChangedConnection)
 
-UserInputService.InputChanged:Connect(function(input)
+local userInputChangedConnection = UserInputService.InputChanged:Connect(function(input)
     if input == dragInput and dragging then
         update(input)
     end
 end)
-
--- Handle zoom
-local function handleZoom()
-    UserInputService.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseWheel then
-            if input.Position.Z > 0 then
-                currentZoom = math.max(MIN_ZOOM, currentZoom - ZOOM_SPEED)
-            else
-                currentZoom = math.min(MAX_ZOOM, currentZoom + ZOOM_SPEED)
-            end
-            -- Update zoom info
-            infoLabel.Text = string.format("Zoom: %.0f | Threshold: %d HP", currentZoom, LOW_HEALTH_THRESHOLD)
-        end
-    end)
-end
-
--- Add info label
-local infoLabel = Instance.new("TextLabel")
-infoLabel.Name = "InfoLabel"
-infoLabel.Size = UDim2.new(0.9, 0, 0, 20)
-infoLabel.Position = UDim2.new(0.05, 0, 0, 35)
-infoLabel.BackgroundTransparency = 1
-infoLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-infoLabel.Text = string.format("Zoom: %.0f | Threshold: %d HP", currentZoom, LOW_HEALTH_THRESHOLD)
-infoLabel.TextSize = 12
-infoLabel.Font = Enum.Font.Gotham
-infoLabel.Parent = mainFrame
-
--- Add close button
-local closeButton = Instance.new("TextButton")
-closeButton.Name = "CloseButton"
-closeButton.Size = UDim2.new(0, 20, 0, 20)
-closeButton.Position = UDim2.new(1, -25, 0, 5)
-closeButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-closeButton.Text = "X"
-closeButton.TextSize = 14
-closeButton.Font = Enum.Font.GothamBold
-closeButton.Parent = mainFrame
-closeButton.ZIndex = 3
-
-local closeCorner = Instance.new("UICorner")
-closeCorner.CornerRadius = UDim.new(0, 5)
-closeCorner.Parent = closeButton
-
--- Add credits
-local creditsLabel = Instance.new("TextLabel")
-creditsLabel.Name = "CreditsLabel"
-creditsLabel.Size = UDim2.new(0.9, 0, 0, 20)
-creditsLabel.Position = UDim2.new(0.05, 0, 0.95, 0)
-creditsLabel.BackgroundTransparency = 1
-creditsLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-creditsLabel.Text = "By " .. SCRIPT_INFO.author
-creditsLabel.TextSize = 12
-creditsLabel.Font = Enum.Font.Gotham
-creditsLabel.Parent = mainFrame
+table.insert(connections, userInputChangedConnection)
 
 -- Connect buttons
 toggleButton.MouseButton1Click:Connect(toggleTeleport)
 aimToggleButton.MouseButton1Click:Connect(toggleAimbot)
 closeButton.MouseButton1Click:Connect(function()
+    -- Cleanup everything when closing
+    for _, connection in pairs(connections) do
+        if typeof(connection) == "RBXScriptConnection" and connection.Connected then
+            connection:Disconnect()
+        end
+    end
+    table.clear(connections)
+    
     if connection then connection:Disconnect() end
     if aimConnection then aimConnection:Disconnect() end
     gui:Destroy()
@@ -468,6 +495,7 @@ local updateConnection = RunService.Heartbeat:Connect(function()
         end
     end
 end)
+table.insert(connections, updateConnection)
 
 -- Create test targets for debugging
 createTestTargets()
@@ -479,31 +507,29 @@ gui.Parent = player:WaitForChild("PlayerGui")
 script.Destroyed:Connect(function()
     print("[Cleanup] Script shutting down...")
     
-    if connection then
-        connection:Disconnect()
-        print("[Cleanup] Follow connection disconnected")
-    end
-    
-    if aimConnection then
-        aimConnection:Disconnect()
-        print("[Cleanup] Aim connection disconnected")
-    end
-    
-    if updateConnection then
-        updateConnection:Disconnect()
-        print("[Cleanup] Update connection disconnected")
-    end
-    
-    -- Remove test targets if they exist
-    for _, obj in pairs(workspace:GetChildren()) do
-        if obj.Name:match("^TestTarget_") then
-            obj:Destroy()
-            print("[Cleanup] Removed test target: " .. obj.Name)
+    -- Disconnect all stored connections
+    for _, connection in pairs(connections) do
+        if typeof(connection) == "RBXScriptConnection" and connection.Connected then
+            connection:Disconnect()
         end
     end
+    table.clear(connections)
     
-    gui:Destroy()
-    print("[Cleanup] GUI removed")
+    -- Remove test targets if they exist
+    pcall(function()
+        for _, obj in pairs(workspace:GetChildren()) do
+            if obj.Name:match("^TestTarget_") then
+                obj:Destroy()
+                print("[Cleanup] Removed test target: " .. obj.Name)
+            end
+        end
+    end)
+    
+    if gui then
+        gui:Destroy()
+        print("[Cleanup] GUI removed")
+    end
+    
     print(string.format("[Cleanup] Script terminated at %s", os.date("%Y-%m-%d %H:%M:%S")))
 end)
 
