@@ -8,12 +8,9 @@ local player = Players.LocalPlayer
 local connection = nil
 local aimConnection = nil
 local targetPlayer = nil
-local DISTANCE = 10
+local DISTANCE = 25
 local isEnabled = false
 local isAimbotEnabled = false
-
--- Health threshold
-local MAX_HEALTH_THRESHOLD = 25
 
 -- Zoom variables
 local MIN_ZOOM = 5
@@ -21,35 +18,141 @@ local MAX_ZOOM = 50
 local currentZoom = 20
 local ZOOM_SPEED = 2
 
--- [Previous GUI creation code remains the same...]
+-- Create ScreenGui
+local gui = Instance.new("ScreenGui")
+gui.Name = "TeleportAndAimGUI"
+gui.ResetOnSpawn = false
 
--- Function to get closest valid target
-local function findNewTarget()
-    local closestDistance = math.huge
-    local newTarget = nil
-    
-    for _, plr in pairs(Players:GetPlayers()) do
-        if plr ~= player then
-            local character = plr.Character
-            if character then
-                local humanoid = character:FindFirstChild("Humanoid")
-                if humanoid and humanoid.Health > 0 and humanoid.Health < MAX_HEALTH_THRESHOLD then
-                    local targetRoot = character:FindFirstChild("HumanoidRootPart")
-                    local playerRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                    
-                    if targetRoot and playerRoot then
-                        local distance = (targetRoot.Position - playerRoot.Position).Magnitude
-                        if distance < closestDistance then
-                            closestDistance = distance
-                            newTarget = plr
-                        end
-                    end
-                end
+-- Create main frame
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 200, 0, 300)
+mainFrame.Position = UDim2.new(0.8, 0, 0.5, -150)
+mainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = gui
+
+-- Add rounded corners
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 10)
+corner.Parent = mainFrame
+
+-- Create title
+local title = Instance.new("TextLabel")
+title.Name = "Title"
+title.Size = UDim2.new(1, 0, 0, 30)
+title.Position = UDim2.new(0, 0, 0, 0)
+title.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Text = "Game Controls"
+title.TextSize = 18
+title.Font = Enum.Font.GothamBold
+title.Parent = mainFrame
+
+-- Add corner to title
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 10)
+titleCorner.Parent = title
+
+-- Create player list
+local playerList = Instance.new("ScrollingFrame")
+playerList.Name = "PlayerList"
+playerList.Size = UDim2.new(0.9, 0, 0.5, 0)
+playerList.Position = UDim2.new(0.05, 0, 0.15, 0)
+playerList.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+playerList.BorderSizePixel = 0
+playerList.ScrollBarThickness = 4
+playerList.Parent = mainFrame
+
+-- Add corner to player list
+local listCorner = Instance.new("UICorner")
+listCorner.CornerRadius = UDim.new(0, 10)
+listCorner.Parent = playerList
+
+-- Create toggle buttons
+local toggleButton = Instance.new("TextButton")
+toggleButton.Name = "ToggleButton"
+toggleButton.Size = UDim2.new(0.9, 0, 0, 40)
+toggleButton.Position = UDim2.new(0.05, 0, 0.7, 0)
+toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.Text = "START FOLLOW"
+toggleButton.TextSize = 18
+toggleButton.Font = Enum.Font.GothamBold
+toggleButton.Parent = mainFrame
+
+local aimToggleButton = Instance.new("TextButton")
+aimToggleButton.Name = "AimToggleButton"
+aimToggleButton.Size = UDim2.new(0.9, 0, 0, 40)
+aimToggleButton.Position = UDim2.new(0.05, 0, 0.85, 0)
+aimToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+aimToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+aimToggleButton.Text = "START AUTO AIM"
+aimToggleButton.TextSize = 18
+aimToggleButton.Font = Enum.Font.GothamBold
+aimToggleButton.Parent = mainFrame
+
+-- Add corners to buttons
+local buttonCorner = Instance.new("UICorner")
+buttonCorner.CornerRadius = UDim.new(0, 10)
+buttonCorner.Parent = toggleButton
+
+local aimButtonCorner = Instance.new("UICorner")
+aimButtonCorner.CornerRadius = UDim.new(0, 10)
+aimButtonCorner.Parent = aimToggleButton
+
+-- Handle zoom function
+local function handleZoom()
+    UserInputService.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseWheel then
+            if input.Position.Z > 0 then
+                currentZoom = math.max(MIN_ZOOM, currentZoom - ZOOM_SPEED)
+            else
+                currentZoom = math.min(MAX_ZOOM, currentZoom + ZOOM_SPEED)
             end
+        end
+    end)
+end
+
+-- Function to update player list
+local function updatePlayerList()
+    for _, child in pairs(playerList:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
         end
     end
     
-    return newTarget
+    local yPosition = 5
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= player then
+            local button = Instance.new("TextButton")
+            button.Size = UDim2.new(0.9, 0, 0, 30)
+            button.Position = UDim2.new(0.05, 0, 0, yPosition)
+            button.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
+            button.TextColor3 = Color3.fromRGB(255, 255, 255)
+            button.Text = plr.Name
+            button.TextSize = 14
+            button.Font = Enum.Font.Gotham
+            button.Parent = playerList
+            
+            local playerButtonCorner = Instance.new("UICorner")
+            playerButtonCorner.CornerRadius = UDim.new(0, 5)
+            playerButtonCorner.Parent = button
+            
+            button.MouseButton1Click:Connect(function()
+                targetPlayer = plr
+                for _, btn in pairs(playerList:GetChildren()) do
+                    if btn:IsA("TextButton") then
+                        btn.BackgroundColor3 = btn == button and Color3.fromRGB(0, 120, 255) or Color3.fromRGB(55, 55, 55)
+                    end
+                end
+            end)
+            
+            yPosition = yPosition + 35
+        end
+    end
+    
+    playerList.CanvasSize = UDim2.new(0, 0, 0, yPosition)
 end
 
 -- Function to get position behind target
@@ -72,48 +175,34 @@ local function aimAtTarget()
         local targetPos = targetHead.Position
         local playerPos = playerHead.Position
         
+        -- Tính toán vector hướng từ player đến target
         local lookVector = (targetPos - playerPos).Unit
+        
+        -- Tạo CFrame mới cho nhân vật, luôn hướng về target
         playerHumanoidRootPart.CFrame = CFrame.lookAt(playerHumanoidRootPart.Position, targetPos)
         
+        -- Tính toán vị trí camera với zoom
         local cameraPos = playerPos - lookVector * currentZoom
+        
+        -- Đặt camera
         camera.CFrame = CFrame.new(cameraPos, targetPos)
     end
 end
 
--- Modified toggle teleport function
+-- Toggle teleport function
 local function toggleTeleport()
     isEnabled = not isEnabled
     
     if isEnabled then
-        toggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-        toggleButton.Text = "STOP FOLLOW"
-        
-        connection = RunService.Heartbeat:Connect(function()
-            -- Check if current target is valid
-            if targetPlayer then
-                local character = targetPlayer.Character
-                if character then
-                    local humanoid = character:FindFirstChild("Humanoid")
-                    if not humanoid or humanoid.Health <= 0 or humanoid.Health >= MAX_HEALTH_THRESHOLD then
-                        -- Current target is no longer valid, find new target
-                        targetPlayer = findNewTarget()
-                        -- Update player list selection
-                        for _, btn in pairs(playerList:GetChildren()) do
-                            if btn:IsA("TextButton") then
-                                btn.BackgroundColor3 = (targetPlayer and btn.Text == targetPlayer.Name) 
-                                    and Color3.fromRGB(0, 120, 255) 
-                                    or Color3.fromRGB(55, 55, 55)
-                            end
-                        end
-                    end
-                end
-            else
-                -- No target, try to find one
-                targetPlayer = findNewTarget()
-            end
+        if targetPlayer then
+            toggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+            toggleButton.Text = "STOP FOLLOW"
             
-            -- If we have a valid target, follow them
-            if targetPlayer and targetPlayer.Character and player.Character then
+            connection = RunService.Heartbeat:Connect(function()
+                if not targetPlayer or not targetPlayer.Character or not player.Character then
+                    return
+                end
+                
                 local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
                 local playerRoot = player.Character:FindFirstChild("HumanoidRootPart")
                 
@@ -121,8 +210,12 @@ local function toggleTeleport()
                     local newPosition = getPositionBehindTarget(targetRoot.CFrame)
                     playerRoot.CFrame = newPosition
                 end
-            end
-        end)
+            end)
+        else
+            isEnabled = false
+            toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+            toggleButton.Text = "SELECT PLAYER"
+        end
     else
         if connection then
             connection:Disconnect()
@@ -160,112 +253,57 @@ local function toggleAimbot()
     end
 end
 
--- Modified player list update with optimization
-local lastUpdateTime = 0
-local UPDATE_INTERVAL = 0.5 -- Update every 0.5 seconds
+-- Make GUI draggable
+local dragging
+local dragInput
+local dragStart
+local startPos
 
-local function updatePlayerList()
-    local currentTime = time()
-    if currentTime - lastUpdateTime < UPDATE_INTERVAL then
-        return
-    end
-    lastUpdateTime = currentTime
+local function update(input)
+    local delta = input.Position - dragStart
+    mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X,
+        startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
 
-    for _, child in pairs(playerList:GetChildren()) do
-        if child:IsA("TextButton") then
-            -- Update health display instead of recreating buttons
-            local healthLabel = child:FindFirstChild("HealthLabel")
-            if healthLabel then
-                local plr = Players:FindFirstChild(child.Text)
-                if plr and plr.Character then
-                    local humanoid = plr.Character:FindFirstChild("Humanoid")
-                    if humanoid then
-                        healthLabel.Text = math.floor(humanoid.Health)
-                        healthLabel.TextColor3 = humanoid.Health < MAX_HEALTH_THRESHOLD 
-                            and Color3.fromRGB(255, 0, 0) 
-                            or Color3.fromRGB(255, 255, 255)
-                    end
-                end
+mainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
             end
-        end
+        end)
     end
-end
+end)
 
--- Function to create initial player list
-local function createPlayerList()
-    for _, child in pairs(playerList:GetChildren()) do
-        if child:IsA("TextButton") then
-            child:Destroy()
-        end
+mainFrame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
     end
-    
-    local yPosition = 5
-    for _, plr in pairs(Players:GetPlayers()) do
-        if plr ~= player then
-            local button = Instance.new("TextButton")
-            button.Size = UDim2.new(0.9, 0, 0, 30)
-            button.Position = UDim2.new(0.05, 0, 0, yPosition)
-            button.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
-            button.TextColor3 = Color3.fromRGB(255, 255, 255)
-            button.Text = plr.Name
-            button.TextSize = 14
-            button.Font = Enum.Font.Gotham
-            button.Parent = playerList
-            
-            local healthLabel = Instance.new("TextLabel")
-            healthLabel.Name = "HealthLabel"
-            healthLabel.Size = UDim2.new(0.3, 0, 1, 0)
-            healthLabel.Position = UDim2.new(0.7, 0, 0, 0)
-            healthLabel.BackgroundTransparency = 1
-            healthLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-            healthLabel.TextSize = 14
-            healthLabel.Font = Enum.Font.Gotham
-            healthLabel.Parent = button
-            
-            local playerButtonCorner = Instance.new("UICorner")
-            playerButtonCorner.CornerRadius = UDim.new(0, 5)
-            playerButtonCorner.Parent = button
-            
-            button.MouseButton1Click:Connect(function()
-                local character = plr.Character
-                if character then
-                    local humanoid = character:FindFirstChild("Humanoid")
-                    if humanoid and humanoid.Health > 0 and humanoid.Health < MAX_HEALTH_THRESHOLD then
-                        targetPlayer = plr
-                        for _, btn in pairs(playerList:GetChildren()) do
-                            if btn:IsA("TextButton") then
-                                btn.BackgroundColor3 = btn == button 
-                                    and Color3.fromRGB(0, 120, 255) 
-                                    or Color3.fromRGB(55, 55, 55)
-                            end
-                        end
-                    end
-                end
-            end)
-            
-            yPosition = yPosition + 35
-        end
-    end
-    
-    playerList.CanvasSize = UDim2.new(0, 0, 0, yPosition)
-end
+end)
 
--- Connect buttons and handle dragging
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        update(input)
+    end
+end)
+
+-- Connect buttons
 toggleButton.MouseButton1Click:Connect(toggleTeleport)
 aimToggleButton.MouseButton1Click:Connect(toggleAimbot)
 
 -- Initialize zoom handling
 handleZoom()
 
--- Setup health monitoring with optimization
-RunService.Heartbeat:Connect(updatePlayerList)
+-- Update player list when players join/leave
+Players.PlayerAdded:Connect(updatePlayerList)
+Players.PlayerRemoving:Connect(updatePlayerList)
 
--- Monitor when players join/leave
-Players.PlayerAdded:Connect(createPlayerList)
-Players.PlayerRemoving:Connect(createPlayerList)
-
--- Initial setup
-createPlayerList()
+-- Initial player list update
+updatePlayerList()
 
 -- Parent GUI to PlayerGui
 gui.Parent = player:WaitForChild("PlayerGui")
