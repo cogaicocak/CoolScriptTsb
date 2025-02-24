@@ -8,7 +8,7 @@ local player = Players.LocalPlayer
 local connection = nil
 local aimConnection = nil
 local targetPlayer = nil
-local DISTANCE = 25
+local DISTANCE = 10
 local isEnabled = false
 local isAimbotEnabled = false
 
