@@ -1,7 +1,7 @@
 -- Script Info
 local SCRIPT_INFO = {
     author = "AnhBaDepTrai",
-    created = "2025-02-24 01:03:08 UTC",
+    created = "2025-02-24 01:11:23 UTC",
     version = "1.0.0"
 }
 
@@ -27,7 +27,7 @@ local MAX_ZOOM = 50
 local currentZoom = 20
 local ZOOM_SPEED = 2
 
--- Function to create test targets
+-- Function tạo đối tượng test
 local function createTestTargets()
     for i = 1, 3 do
         local testModel = Instance.new("Model")
@@ -254,7 +254,30 @@ local function updateTargetList()
             buttonCorner.CornerRadius = UDim.new(0, 5)
             buttonCorner.Parent = button
             
-            -- Store connections
+            local clickConnection = button.MouseButton1Click:Connect(function()
+                targetObject = target
+                statusLabel.Text = string.format("Selected: %s (HP: %.1f)", target.Name, humanoid.Health)
+                
+                -- Cập nhật màu cho tất cả các button
+                for _, btn in pairs(targetList:GetChildren()) do
+                    if btn:IsA("TextButton") then
+                        btn.BackgroundColor3 = btn == button and Color3.fromRGB(0, 120, 255) or Color3.fromRGB(55, 55, 55)
+                    end
+                end
+
+                -- Reset trạng thái các button chính
+                if not isEnabled then
+                    toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+                    toggleButton.Text = "START FOLLOW"
+                end
+                
+                if not isAimbotEnabled then
+                    aimToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+                    aimToggleButton.Text = "START AUTO AIM"
+                end
+            end)
+            
+            -- Store button connections
             local enterConnection = button.MouseEnter:Connect(function()
                 button.BackgroundColor3 = Color3.fromRGB(75, 75, 75)
             end)
@@ -265,21 +288,9 @@ local function updateTargetList()
                 end
             end)
             
-            local clickConnection = button.MouseButton1Click:Connect(function()
-                targetObject = target
-                statusLabel.Text = string.format("Selected: %s (HP: %.1f)", target.Name, humanoid.Health)
-                
-                for _, btn in pairs(targetList:GetChildren()) do
-                    if btn:IsA("TextButton") then
-                        btn.BackgroundColor3 = btn == button and Color3.fromRGB(0, 120, 255) or Color3.fromRGB(55, 55, 55)
-                    end
-                end
-            end)
-            
-            -- Store connections for cleanup
+            table.insert(connections, clickConnection)
             table.insert(connections, enterConnection)
             table.insert(connections, leaveConnection)
-            table.insert(connections, clickConnection)
             
             yPosition = yPosition + 35
         end
@@ -319,37 +330,36 @@ local function aimAtTarget()
 end
 
 local function toggleTeleport()
+    if not targetObject then
+        statusLabel.Text = "Please select a target first!"
+        return
+    end
+    
     isEnabled = not isEnabled
     
     if isEnabled then
-        if targetObject then
-            toggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-            toggleButton.Text = "STOP FOLLOW"
+        toggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        toggleButton.Text = "STOP FOLLOW"
+        
+        connection = RunService.Heartbeat:Connect(function()
+            if not targetObject or not player.Character then return end
             
-            connection = RunService.Heartbeat:Connect(function()
-                if not targetObject or not player.Character then return end
-                
-                local targetHumanoid = targetObject:FindFirstChild("Humanoid")
-                local targetRoot = targetObject:FindFirstChild("HumanoidRootPart")
-                local playerRoot = player.Character:FindFirstChild("HumanoidRootPart")
-                
-                if targetRoot and playerRoot and targetHumanoid and 
-                   targetHumanoid.Health > 0 and targetHumanoid.Health < LOW_HEALTH_THRESHOLD then
-                    local newPosition = getPositionBehindTarget(targetRoot.CFrame)
-                    playerRoot.CFrame = newPosition
-                else
-                    toggleTeleport()
-                    targetObject = nil
-                    statusLabel.Text = "Target lost"
-                    updateTargetList()
-                end
-            end)
-            table.insert(connections, connection)
-        else
-            isEnabled = false
-            toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-            toggleButton.Text = "SELECT TARGET"
-        end
+            local targetHumanoid = targetObject:FindFirstChild("Humanoid")
+            local targetRoot = targetObject:FindFirstChild("HumanoidRootPart")
+            local playerRoot = player.Character:FindFirstChild("HumanoidRootPart")
+            
+            if targetRoot and playerRoot and targetHumanoid and 
+               targetHumanoid.Health > 0 and targetHumanoid.Health < LOW_HEALTH_THRESHOLD then
+                local newPosition = getPositionBehindTarget(targetRoot.CFrame)
+                playerRoot.CFrame = newPosition
+            else
+                toggleTeleport()
+                targetObject = nil
+                statusLabel.Text = "Target lost"
+                updateTargetList()
+            end
+        end)
+        table.insert(connections, connection)
     else
         if connection then
             connection:Disconnect()
@@ -361,22 +371,21 @@ local function toggleTeleport()
 end
 
 local function toggleAimbot()
+    if not targetObject then
+        statusLabel.Text = "Please select a target first!"
+        return
+    end
+    
     isAimbotEnabled = not isAimbotEnabled
     
     if isAimbotEnabled then
-        if targetObject then
-            aimToggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-            aimToggleButton.Text = "STOP AUTO AIM"
-            
-            aimConnection = RunService.RenderStepped:Connect(function()
-                aimAtTarget()
-            end)
-            table.insert(connections, aimConnection)
-        else
-            isAimbotEnabled = false
-            aimToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-            aimToggleButton.Text = "SELECT TARGET"
-        end
+        aimToggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        aimToggleButton.Text = "STOP AUTO AIM"
+        
+        aimConnection = RunService.RenderStepped:Connect(function()
+            aimAtTarget()
+        end)
+        table.insert(connections, aimConnection)
     else
         if aimConnection then
             aimConnection:Disconnect()
