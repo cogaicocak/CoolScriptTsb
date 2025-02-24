@@ -21,7 +21,7 @@ local MAX_ZOOM = 50
 local currentZoom = 20
 local ZOOM_SPEED = 2
 
--- [Previous GUI creation code remains the same until the toggleTeleport function]
+-- [Previous GUI creation code remains the same...]
 
 -- Function to get closest valid target
 local function findNewTarget()
@@ -50,6 +50,34 @@ local function findNewTarget()
     end
     
     return newTarget
+end
+
+-- Function to get position behind target
+local function getPositionBehindTarget(targetCFrame)
+    return targetCFrame * CFrame.new(0, 0, DISTANCE)
+end
+
+-- Function to aim at target
+local function aimAtTarget()
+    if not targetPlayer or not targetPlayer.Character or not player.Character then
+        return
+    end
+    
+    local targetHead = targetPlayer.Character:FindFirstChild("Head")
+    local playerHead = player.Character:FindFirstChild("Head")
+    local playerHumanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+    
+    if targetHead and playerHead and playerHumanoidRootPart then
+        local camera = workspace.CurrentCamera
+        local targetPos = targetHead.Position
+        local playerPos = playerHead.Position
+        
+        local lookVector = (targetPos - playerPos).Unit
+        playerHumanoidRootPart.CFrame = CFrame.lookAt(playerHumanoidRootPart.Position, targetPos)
+        
+        local cameraPos = playerPos - lookVector * currentZoom
+        camera.CFrame = CFrame.new(cameraPos, targetPos)
+    end
 end
 
 -- Modified toggle teleport function
@@ -105,8 +133,66 @@ local function toggleTeleport()
     end
 end
 
--- Modified player list button click handler
+-- Toggle aimbot function
+local function toggleAimbot()
+    isAimbotEnabled = not isAimbotEnabled
+    
+    if isAimbotEnabled then
+        if targetPlayer then
+            aimToggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+            aimToggleButton.Text = "STOP AUTO AIM"
+            
+            aimConnection = RunService.RenderStepped:Connect(function()
+                aimAtTarget()
+            end)
+        else
+            isAimbotEnabled = false
+            aimToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+            aimToggleButton.Text = "SELECT PLAYER"
+        end
+    else
+        if aimConnection then
+            aimConnection:Disconnect()
+            aimConnection = nil
+        end
+        aimToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+        aimToggleButton.Text = "START AUTO AIM"
+    end
+end
+
+-- Modified player list update with optimization
+local lastUpdateTime = 0
+local UPDATE_INTERVAL = 0.5 -- Update every 0.5 seconds
+
 local function updatePlayerList()
+    local currentTime = time()
+    if currentTime - lastUpdateTime < UPDATE_INTERVAL then
+        return
+    end
+    lastUpdateTime = currentTime
+
+    for _, child in pairs(playerList:GetChildren()) do
+        if child:IsA("TextButton") then
+            -- Update health display instead of recreating buttons
+            local healthLabel = child:FindFirstChild("HealthLabel")
+            if healthLabel then
+                local plr = Players:FindFirstChild(child.Text)
+                if plr and plr.Character then
+                    local humanoid = plr.Character:FindFirstChild("Humanoid")
+                    if humanoid then
+                        healthLabel.Text = math.floor(humanoid.Health)
+                        healthLabel.TextColor3 = humanoid.Health < MAX_HEALTH_THRESHOLD 
+                            and Color3.fromRGB(255, 0, 0) 
+                            or Color3.fromRGB(255, 255, 255)
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Function to create initial player list
+local function createPlayerList()
     for _, child in pairs(playerList:GetChildren()) do
         if child:IsA("TextButton") then
             child:Destroy()
@@ -126,8 +212,8 @@ local function updatePlayerList()
             button.Font = Enum.Font.Gotham
             button.Parent = playerList
             
-            -- Add health display
             local healthLabel = Instance.new("TextLabel")
+            healthLabel.Name = "HealthLabel"
             healthLabel.Size = UDim2.new(0.3, 0, 1, 0)
             healthLabel.Position = UDim2.new(0.7, 0, 0, 0)
             healthLabel.BackgroundTransparency = 1
@@ -135,37 +221,6 @@ local function updatePlayerList()
             healthLabel.TextSize = 14
             healthLabel.Font = Enum.Font.Gotham
             healthLabel.Parent = button
-            
-            -- Update health display
-            local function updateHealth()
-                local character = plr.Character
-                if character then
-                    local humanoid = character:FindFirstChild("Humanoid")
-                    if humanoid then
-                        healthLabel.Text = math.floor(humanoid.Health)
-                        -- Color code based on health threshold
-                        healthLabel.TextColor3 = humanoid.Health < MAX_HEALTH_THRESHOLD 
-                            and Color3.fromRGB(255, 0, 0) 
-                            or Color3.fromRGB(255, 255, 255)
-                    end
-                end
-            end
-            
-            -- Connect health update
-            local character = plr.Character
-            if character then
-                local humanoid = character:FindFirstChild("Humanoid")
-                if humanoid then
-                    humanoid.HealthChanged:Connect(updateHealth)
-                end
-            end
-            plr.CharacterAdded:Connect(function(char)
-                local humanoid = char:WaitForChild("Humanoid")
-                humanoid.HealthChanged:Connect(updateHealth)
-                updateHealth()
-            end)
-            
-            updateHealth()
             
             local playerButtonCorner = Instance.new("UICorner")
             playerButtonCorner.CornerRadius = UDim.new(0, 5)
@@ -195,163 +250,22 @@ local function updatePlayerList()
     playerList.CanvasSize = UDim2.new(0, 0, 0, yPosition)
 end
 
--- Function to get position behind target
-local function getPositionBehindTarget(targetCFrame)
-    return targetCFrame * CFrame.new(0, 0, DISTANCE)
-end
-
--- Function to aim at target
-local function aimAtTarget()
-    if not targetPlayer or not targetPlayer.Character or not player.Character then
-        return
-    end
-    
-    local targetHead = targetPlayer.Character:FindFirstChild("Head")
-    local playerHead = player.Character:FindFirstChild("Head")
-    local playerHumanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-    
-    if targetHead and playerHead and playerHumanoidRootPart then
-        local camera = workspace.CurrentCamera
-        local targetPos = targetHead.Position
-        local playerPos = playerHead.Position
-        
-        -- Calculate direction vector from player to target
-        local lookVector = (targetPos - playerPos).Unit
-        
-        -- Create new CFrame for character, always facing target
-        playerHumanoidRootPart.CFrame = CFrame.lookAt(playerHumanoidRootPart.Position, targetPos)
-        
-        -- Calculate camera position with zoom
-        local cameraPos = playerPos - lookVector * currentZoom
-        
-        -- Set camera
-        camera.CFrame = CFrame.new(cameraPos, targetPos)
-    end
-end
-
--- Toggle teleport function
-local function toggleTeleport()
-    isEnabled = not isEnabled
-    
-    if isEnabled then
-        if targetPlayer then
-            toggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-            toggleButton.Text = "STOP FOLLOW"
-            
-            connection = RunService.Heartbeat:Connect(function()
-                if not targetPlayer or not targetPlayer.Character or not player.Character then
-                    return
-                end
-                
-                local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-                local playerRoot = player.Character:FindFirstChild("HumanoidRootPart")
-                
-                if targetRoot and playerRoot then
-                    local newPosition = getPositionBehindTarget(targetRoot.CFrame)
-                    playerRoot.CFrame = newPosition
-                end
-            end)
-        else
-            isEnabled = false
-            toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-            toggleButton.Text = "SELECT PLAYER"
-        end
-    else
-        if connection then
-            connection:Disconnect()
-            connection = nil
-        end
-        toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-        toggleButton.Text = "START FOLLOW"
-    end
-end
-
--- Toggle aimbot function
-local function toggleAimbot()
-    isAimbotEnabled = not isAimbotEnabled
-    
-    if isAimbotEnabled then
-        if targetPlayer then
-            aimToggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-            aimToggleButton.Text = "STOP AUTO AIM"
-            
-            aimConnection = RunService.RenderStepped:Connect(function()
-                aimAtTarget()
-            end)
-        else
-            isAimbotEnabled = false
-            aimToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-            aimToggleButton.Text = "SELECT PLAYER"
-        end
-    else
-        if aimConnection then
-            aimConnection:Disconnect()
-            aimConnection = nil
-        end
-        aimToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-        aimToggleButton.Text = "START AUTO AIM"
-    end
-end
-
--- Make GUI draggable
-local dragging
-local dragInput
-local dragStart
-local startPos
-
-local function update(input)
-    local delta = input.Position - dragStart
-    mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X,
-        startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-end
-
-mainFrame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = mainFrame.Position
-        
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-            end
-        end)
-    end
-end)
-
-mainFrame.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-        dragInput = input
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if input == dragInput and dragging then
-        update(input)
-    end
-end)
-
--- Connect buttons
+-- Connect buttons and handle dragging
 toggleButton.MouseButton1Click:Connect(toggleTeleport)
 aimToggleButton.MouseButton1Click:Connect(toggleAimbot)
 
 -- Initialize zoom handling
 handleZoom()
 
--- Setup continuous health monitoring
-local function startHealthMonitoring()
-    RunService.Heartbeat:Connect(function()
-        updatePlayerList()
-    end)
-end
+-- Setup health monitoring with optimization
+RunService.Heartbeat:Connect(updatePlayerList)
 
 -- Monitor when players join/leave
-Players.PlayerAdded:Connect(updatePlayerList)
-Players.PlayerRemoving:Connect(updatePlayerList)
+Players.PlayerAdded:Connect(createPlayerList)
+Players.PlayerRemoving:Connect(createPlayerList)
 
--- Initial player list update and start monitoring
-updatePlayerList()
-startHealthMonitoring()
+-- Initial setup
+createPlayerList()
 
 -- Parent GUI to PlayerGui
 gui.Parent = player:WaitForChild("PlayerGui")
