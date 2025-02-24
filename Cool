@@ -114,6 +114,17 @@ local function handleZoom()
     end)
 end
 
+-- Function to check if player has low health
+local function hasLowHealth(plr)
+    if plr.Character then
+        local humanoid = plr.Character:FindFirstChild("Humanoid")
+        if humanoid then
+            return humanoid.Health < 25
+        end
+    end
+    return false
+end
+
 -- Function to update player list
 local function updatePlayerList()
     for _, child in pairs(playerList:GetChildren()) do
@@ -124,7 +135,7 @@ local function updatePlayerList()
     
     local yPosition = 5
     for _, plr in pairs(Players:GetPlayers()) do
-        if plr ~= player then
+        if plr ~= player and hasLowHealth(plr) then
             local button = Instance.new("TextButton")
             button.Size = UDim2.new(0.9, 0, 0, 30)
             button.Position = UDim2.new(0.05, 0, 0, yPosition)
@@ -175,16 +186,16 @@ local function aimAtTarget()
         local targetPos = targetHead.Position
         local playerPos = playerHead.Position
         
-        -- Tính toán vector hướng từ player đến target
+        -- Calculate direction vector from player to target
         local lookVector = (targetPos - playerPos).Unit
         
-        -- Tạo CFrame mới cho nhân vật, luôn hướng về target
+        -- Create new CFrame for character, always facing target
         playerHumanoidRootPart.CFrame = CFrame.lookAt(playerHumanoidRootPart.Position, targetPos)
         
-        -- Tính toán vị trí camera với zoom
+        -- Calculate camera position with zoom
         local cameraPos = playerPos - lookVector * currentZoom
         
-        -- Đặt camera
+        -- Set camera
         camera.CFrame = CFrame.new(cameraPos, targetPos)
     end
 end
@@ -298,12 +309,20 @@ aimToggleButton.MouseButton1Click:Connect(toggleAimbot)
 -- Initialize zoom handling
 handleZoom()
 
--- Update player list when players join/leave
+-- Setup continuous health monitoring
+local function startHealthMonitoring()
+    RunService.Heartbeat:Connect(function()
+        updatePlayerList()
+    end)
+end
+
+-- Monitor when players join/leave
 Players.PlayerAdded:Connect(updatePlayerList)
 Players.PlayerRemoving:Connect(updatePlayerList)
 
--- Initial player list update
+-- Initial player list update and start monitoring
 updatePlayerList()
+startHealthMonitoring()
 
 -- Parent GUI to PlayerGui
 gui.Parent = player:WaitForChild("PlayerGui")
