@@ -12,120 +12,100 @@ local DISTANCE = 10
 local isEnabled = false
 local isAimbotEnabled = false
 
+-- Health threshold
+local MAX_HEALTH_THRESHOLD = 25
+
 -- Zoom variables
 local MIN_ZOOM = 5
 local MAX_ZOOM = 50
 local currentZoom = 20
 local ZOOM_SPEED = 2
 
--- Create ScreenGui
-local gui = Instance.new("ScreenGui")
-gui.Name = "TeleportAndAimGUI"
-gui.ResetOnSpawn = false
+-- [Previous GUI creation code remains the same until the toggleTeleport function]
 
--- Create main frame
-local mainFrame = Instance.new("Frame")
-mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 200, 0, 300)
-mainFrame.Position = UDim2.new(0.8, 0, 0.5, -150)
-mainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-mainFrame.BorderSizePixel = 0
-mainFrame.Parent = gui
-
--- Add rounded corners
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 10)
-corner.Parent = mainFrame
-
--- Create title
-local title = Instance.new("TextLabel")
-title.Name = "Title"
-title.Size = UDim2.new(1, 0, 0, 30)
-title.Position = UDim2.new(0, 0, 0, 0)
-title.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.Text = "Game Controls"
-title.TextSize = 18
-title.Font = Enum.Font.GothamBold
-title.Parent = mainFrame
-
--- Add corner to title
-local titleCorner = Instance.new("UICorner")
-titleCorner.CornerRadius = UDim.new(0, 10)
-titleCorner.Parent = title
-
--- Create player list
-local playerList = Instance.new("ScrollingFrame")
-playerList.Name = "PlayerList"
-playerList.Size = UDim2.new(0.9, 0, 0.5, 0)
-playerList.Position = UDim2.new(0.05, 0, 0.15, 0)
-playerList.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-playerList.BorderSizePixel = 0
-playerList.ScrollBarThickness = 4
-playerList.Parent = mainFrame
-
--- Add corner to player list
-local listCorner = Instance.new("UICorner")
-listCorner.CornerRadius = UDim.new(0, 10)
-listCorner.Parent = playerList
-
--- Create toggle buttons
-local toggleButton = Instance.new("TextButton")
-toggleButton.Name = "ToggleButton"
-toggleButton.Size = UDim2.new(0.9, 0, 0, 40)
-toggleButton.Position = UDim2.new(0.05, 0, 0.7, 0)
-toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleButton.Text = "START FOLLOW"
-toggleButton.TextSize = 18
-toggleButton.Font = Enum.Font.GothamBold
-toggleButton.Parent = mainFrame
-
-local aimToggleButton = Instance.new("TextButton")
-aimToggleButton.Name = "AimToggleButton"
-aimToggleButton.Size = UDim2.new(0.9, 0, 0, 40)
-aimToggleButton.Position = UDim2.new(0.05, 0, 0.85, 0)
-aimToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-aimToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-aimToggleButton.Text = "START AUTO AIM"
-aimToggleButton.TextSize = 18
-aimToggleButton.Font = Enum.Font.GothamBold
-aimToggleButton.Parent = mainFrame
-
--- Add corners to buttons
-local buttonCorner = Instance.new("UICorner")
-buttonCorner.CornerRadius = UDim.new(0, 10)
-buttonCorner.Parent = toggleButton
-
-local aimButtonCorner = Instance.new("UICorner")
-aimButtonCorner.CornerRadius = UDim.new(0, 10)
-aimButtonCorner.Parent = aimToggleButton
-
--- Handle zoom function
-local function handleZoom()
-    UserInputService.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseWheel then
-            if input.Position.Z > 0 then
-                currentZoom = math.max(MIN_ZOOM, currentZoom - ZOOM_SPEED)
-            else
-                currentZoom = math.min(MAX_ZOOM, currentZoom + ZOOM_SPEED)
+-- Function to get closest valid target
+local function findNewTarget()
+    local closestDistance = math.huge
+    local newTarget = nil
+    
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= player then
+            local character = plr.Character
+            if character then
+                local humanoid = character:FindFirstChild("Humanoid")
+                if humanoid and humanoid.Health > 0 and humanoid.Health < MAX_HEALTH_THRESHOLD then
+                    local targetRoot = character:FindFirstChild("HumanoidRootPart")
+                    local playerRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                    
+                    if targetRoot and playerRoot then
+                        local distance = (targetRoot.Position - playerRoot.Position).Magnitude
+                        if distance < closestDistance then
+                            closestDistance = distance
+                            newTarget = plr
+                        end
+                    end
+                end
             end
         end
-    end)
-end
-
--- Function to check if player has low health
-local function hasLowHealth(plr)
-    if plr.Character then
-        local humanoid = plr.Character:FindFirstChild("Humanoid")
-        if humanoid then
-            return humanoid.Health < 25
-        end
     end
-    return false
+    
+    return newTarget
 end
 
--- Function to update player list
+-- Modified toggle teleport function
+local function toggleTeleport()
+    isEnabled = not isEnabled
+    
+    if isEnabled then
+        toggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        toggleButton.Text = "STOP FOLLOW"
+        
+        connection = RunService.Heartbeat:Connect(function()
+            -- Check if current target is valid
+            if targetPlayer then
+                local character = targetPlayer.Character
+                if character then
+                    local humanoid = character:FindFirstChild("Humanoid")
+                    if not humanoid or humanoid.Health <= 0 or humanoid.Health >= MAX_HEALTH_THRESHOLD then
+                        -- Current target is no longer valid, find new target
+                        targetPlayer = findNewTarget()
+                        -- Update player list selection
+                        for _, btn in pairs(playerList:GetChildren()) do
+                            if btn:IsA("TextButton") then
+                                btn.BackgroundColor3 = (targetPlayer and btn.Text == targetPlayer.Name) 
+                                    and Color3.fromRGB(0, 120, 255) 
+                                    or Color3.fromRGB(55, 55, 55)
+                            end
+                        end
+                    end
+                end
+            else
+                -- No target, try to find one
+                targetPlayer = findNewTarget()
+            end
+            
+            -- If we have a valid target, follow them
+            if targetPlayer and targetPlayer.Character and player.Character then
+                local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                local playerRoot = player.Character:FindFirstChild("HumanoidRootPart")
+                
+                if targetRoot and playerRoot then
+                    local newPosition = getPositionBehindTarget(targetRoot.CFrame)
+                    playerRoot.CFrame = newPosition
+                end
+            end
+        end)
+    else
+        if connection then
+            connection:Disconnect()
+            connection = nil
+        end
+        toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+        toggleButton.Text = "START FOLLOW"
+    end
+end
+
+-- Modified player list button click handler
 local function updatePlayerList()
     for _, child in pairs(playerList:GetChildren()) do
         if child:IsA("TextButton") then
@@ -135,7 +115,7 @@ local function updatePlayerList()
     
     local yPosition = 5
     for _, plr in pairs(Players:GetPlayers()) do
-        if plr ~= player and hasLowHealth(plr) then
+        if plr ~= player then
             local button = Instance.new("TextButton")
             button.Size = UDim2.new(0.9, 0, 0, 30)
             button.Position = UDim2.new(0.05, 0, 0, yPosition)
@@ -146,15 +126,64 @@ local function updatePlayerList()
             button.Font = Enum.Font.Gotham
             button.Parent = playerList
             
+            -- Add health display
+            local healthLabel = Instance.new("TextLabel")
+            healthLabel.Size = UDim2.new(0.3, 0, 1, 0)
+            healthLabel.Position = UDim2.new(0.7, 0, 0, 0)
+            healthLabel.BackgroundTransparency = 1
+            healthLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            healthLabel.TextSize = 14
+            healthLabel.Font = Enum.Font.Gotham
+            healthLabel.Parent = button
+            
+            -- Update health display
+            local function updateHealth()
+                local character = plr.Character
+                if character then
+                    local humanoid = character:FindFirstChild("Humanoid")
+                    if humanoid then
+                        healthLabel.Text = math.floor(humanoid.Health)
+                        -- Color code based on health threshold
+                        healthLabel.TextColor3 = humanoid.Health < MAX_HEALTH_THRESHOLD 
+                            and Color3.fromRGB(255, 0, 0) 
+                            or Color3.fromRGB(255, 255, 255)
+                    end
+                end
+            end
+            
+            -- Connect health update
+            local character = plr.Character
+            if character then
+                local humanoid = character:FindFirstChild("Humanoid")
+                if humanoid then
+                    humanoid.HealthChanged:Connect(updateHealth)
+                end
+            end
+            plr.CharacterAdded:Connect(function(char)
+                local humanoid = char:WaitForChild("Humanoid")
+                humanoid.HealthChanged:Connect(updateHealth)
+                updateHealth()
+            end)
+            
+            updateHealth()
+            
             local playerButtonCorner = Instance.new("UICorner")
             playerButtonCorner.CornerRadius = UDim.new(0, 5)
             playerButtonCorner.Parent = button
             
             button.MouseButton1Click:Connect(function()
-                targetPlayer = plr
-                for _, btn in pairs(playerList:GetChildren()) do
-                    if btn:IsA("TextButton") then
-                        btn.BackgroundColor3 = btn == button and Color3.fromRGB(0, 120, 255) or Color3.fromRGB(55, 55, 55)
+                local character = plr.Character
+                if character then
+                    local humanoid = character:FindFirstChild("Humanoid")
+                    if humanoid and humanoid.Health > 0 and humanoid.Health < MAX_HEALTH_THRESHOLD then
+                        targetPlayer = plr
+                        for _, btn in pairs(playerList:GetChildren()) do
+                            if btn:IsA("TextButton") then
+                                btn.BackgroundColor3 = btn == button 
+                                    and Color3.fromRGB(0, 120, 255) 
+                                    or Color3.fromRGB(55, 55, 55)
+                            end
+                        end
                     end
                 end
             end)
