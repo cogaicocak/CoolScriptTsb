@@ -9,7 +9,7 @@ local connection = nil
 local aimConnection = nil
 
 local targetPlayer = nil
-local DISTANCE = 5
+local DISTANCE = 4
 local isEnabled = false
 local isAimbotEnabled = false
 
@@ -139,7 +139,14 @@ local function performM1Click()
         }
     }
     
-    local args2 = {
+    if player.Character and player.Character:FindFirstChild("Communicate") then
+        player.Character.Communicate:FireServer(unpack(args1))
+    end
+end
+
+-- Function to release M1
+local function releaseM1Click()
+    local args = {
         [1] = {
             ["Goal"] = "LeftClickRelease",
             ["Mobile"] = true
@@ -147,9 +154,7 @@ local function performM1Click()
     }
     
     if player.Character and player.Character:FindFirstChild("Communicate") then
-        player.Character.Communicate:FireServer(unpack(args1))
-        task.wait(0.1)
-        player.Character.Communicate:FireServer(unpack(args2))
+        player.Character.Communicate:FireServer(unpack(args))
     end
 end
 
@@ -198,16 +203,16 @@ local function toggleAutoKills()
             table.insert(skillThreads, thread)
         end
         
-        -- Start auto M1
+        -- Start auto M1 (chỉ click một lần và giữ)
         m1Thread = task.spawn(function()
-            while autoKillsEnabled do
-                performM1Click()
-                task.wait(0.1)
-            end
+            performM1Click()
         end)
     else
         autoKillsButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
         autoKillsButton.Text = "START AUTO KILLS"
+        
+        -- Release M1 first
+        releaseM1Click()
         
         -- Stop skill threads
         for _, thread in ipairs(skillThreads) do
