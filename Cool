@@ -11,7 +11,7 @@ local skillThreads = {}
 local m1Thread = nil
 local currentTarget = nil
 local DISTANCE = 0
-local WAITING_POSITION = Vector3.new(9.00, 652.52, -363.00)
+local WAITING_POSITION = Vector3.new(1064.00, 131.51, 23007.00)
 
 -- Create ScreenGui
 local gui = Instance.new("ScreenGui")
