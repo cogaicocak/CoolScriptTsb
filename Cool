@@ -10,7 +10,7 @@ local autoKillsEnabled = false
 local skillThreads = {}
 local m1Thread = nil
 local currentTarget = nil
-local DISTANCE = 10
+local DISTANCE = 0
 local WAITING_POSITION = Vector3.new(9.00, 652.52, -363.00)
 
 -- Create ScreenGui
