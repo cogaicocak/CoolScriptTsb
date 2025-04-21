@@ -144,20 +144,41 @@ end
 
 -- Function to check if player has Death Counter
 local function hasDeathCounter(plr)
+    -- Check Backpack
     if plr and plr:FindFirstChild("Backpack") then
-        return plr.Backpack:FindFirstChild("Death Counter") ~= nil
+        if plr.Backpack:FindFirstChild("Death Counter") then
+            return true
+        end
     end
+    
+    -- Check Character (for equipped items)
+    if plr and plr.Character then
+        if plr.Character:FindFirstChild("Death Counter") then
+            return true
+        end
+    end
+    
     return false
 end
 
 -- Function to find valid target
 local function findValidTarget()
+    -- If we have a current target, check if we should keep targeting them
+    if currentTarget then
+        local health = getPlayerHealth(currentTarget)
+        -- Only drop target if they die (health = 0) or have Death Counter
+        if health > 0 and not hasDeathCounter(currentTarget) then
+            return currentTarget -- Continue targeting current target
+        end
+    end
+
+    -- Find new target if current target is invalid
     local validTarget = nil
     local lowestHealth = 20 -- Only target players with health below 20
 
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= player then
-            -- Skip if player has Death Counter in their Backpack
+            -- Skip if player has Death Counter
             if not hasDeathCounter(plr) then
                 local health = getPlayerHealth(plr)
                 if health > 0 and health < lowestHealth then
@@ -233,10 +254,10 @@ local function toggleAutoKills()
             currentTarget = findValidTarget()
             
             if currentTarget then
-                -- Follow and aim at target
+                -- Follow and aim at target until they die
                 followAndAttackTarget(currentTarget)
             else
-                -- Return to waiting position if no valid target
+                -- Only return to waiting position if no valid target
                 moveToWaitingPosition()
                 -- Release M1 while waiting
                 releaseM1Click()
