@@ -10,7 +10,7 @@ local autoKillsEnabled = false
 local skillThreads = {}
 local m1Thread = nil
 local currentTarget = nil
-local DISTANCE = 10
+local DISTANCE = 0
 
 -- Create ScreenGui
 local gui = Instance.new("ScreenGui")
