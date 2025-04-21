@@ -11,7 +11,6 @@ local skillThreads = {}
 local m1Thread = nil
 local currentTarget = nil
 local DISTANCE = 0
-local WAITING_POSITION = Vector3.new(1064.00, 131.51, 23007.00)
 
 -- Create ScreenGui
 local gui = Instance.new("ScreenGui")
@@ -65,16 +64,6 @@ autoKillsButton.Parent = mainFrame
 local buttonCorner = Instance.new("UICorner")
 buttonCorner.CornerRadius = UDim.new(0, 10)
 buttonCorner.Parent = autoKillsButton
-
--- Function to teleport to waiting position
-local function teleportToWaitingPosition()
-    if player.Character then
-        local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-        if humanoidRootPart then
-            humanoidRootPart.CFrame = CFrame.new(WAITING_POSITION)
-        end
-    end
-end
 
 -- Function to change character to Hunter
 local function changeToHunter()
@@ -142,6 +131,14 @@ local function getPlayerHealth(plr)
     return 0
 end
 
+-- Function to check if player has Death Counter
+local function hasDeathCounter(plr)
+    if plr and plr:FindFirstChild("Backpack") then
+        return plr.Backpack:FindFirstChild("Death Counter") ~= nil
+    end
+    return false
+end
+
 -- Function to find valid target
 local function findValidTarget()
     local validTarget = nil
@@ -149,10 +146,13 @@ local function findValidTarget()
 
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= player then
-            local health = getPlayerHealth(plr)
-            if health > 0 and health < lowestHealth then
-                validTarget = plr
-                lowestHealth = health
+            -- Skip if player has Death Counter in their Backpack
+            if not hasDeathCounter(plr) then
+                local health = getPlayerHealth(plr)
+                if health > 0 and health < lowestHealth then
+                    validTarget = plr
+                    lowestHealth = health
+                end
             end
         end
     end
@@ -213,9 +213,6 @@ local function toggleAutoKills()
         -- Wait a short moment for character change to complete
         task.wait(1)
         
-        -- Teleport to waiting position first
-        teleportToWaitingPosition()
-        
         -- Start main loop
         connection = RunService.Heartbeat:Connect(function()
             -- Find target
@@ -224,11 +221,6 @@ local function toggleAutoKills()
             if currentTarget then
                 -- Follow and aim at target
                 followAndAttackTarget(currentTarget)
-            else
-                -- Return to waiting position if no valid target
-                teleportToWaitingPosition()
-                -- Release M1 when no target
-                releaseM1Click()
             end
         end)
         
