@@ -10,7 +10,8 @@ local autoKillsEnabled = false
 local skillThreads = {}
 local m1Thread = nil
 local currentTarget = nil
-local DISTANCE = 0
+local DISTANCE = 10
+local WAITING_POSITION = Vector3.new(9.00, 652.52, -363.00)
 
 -- Create ScreenGui
 local gui = Instance.new("ScreenGui")
@@ -64,6 +65,16 @@ autoKillsButton.Parent = mainFrame
 local buttonCorner = Instance.new("UICorner")
 buttonCorner.CornerRadius = UDim.new(0, 10)
 buttonCorner.Parent = autoKillsButton
+
+-- Function to teleport to waiting position
+local function teleportToWaitingPosition()
+    if player.Character then
+        local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+        if humanoidRootPart then
+            humanoidRootPart.CFrame = CFrame.new(WAITING_POSITION)
+        end
+    end
+end
 
 -- Function to change character to Hunter
 local function changeToHunter()
@@ -202,6 +213,9 @@ local function toggleAutoKills()
         -- Wait a short moment for character change to complete
         task.wait(1)
         
+        -- Teleport to waiting position first
+        teleportToWaitingPosition()
+        
         -- Start main loop
         connection = RunService.Heartbeat:Connect(function()
             -- Find target
@@ -210,6 +224,11 @@ local function toggleAutoKills()
             if currentTarget then
                 -- Follow and aim at target
                 followAndAttackTarget(currentTarget)
+            else
+                -- Return to waiting position if no valid target
+                teleportToWaitingPosition()
+                -- Release M1 when no target
+                releaseM1Click()
             end
         end)
         
