@@ -6,34 +6,22 @@ local UserInputService = game:GetService("UserInputService")
 -- Variables 
 local player = Players.LocalPlayer
 local connection = nil
-local aimConnection = nil
-
-local targetPlayer = nil
-local DISTANCE = 4
-local isEnabled = false
-local isAimbotEnabled = false
-
--- Zoom variables
-local MIN_ZOOM = 5
-local MAX_ZOOM = 50
-local currentZoom = 20
-local ZOOM_SPEED = 2
-
--- Variables for Auto Kills
 local autoKillsEnabled = false
 local skillThreads = {}
 local m1Thread = nil
+local currentTarget = nil
+local DISTANCE = 10
 
 -- Create ScreenGui
 local gui = Instance.new("ScreenGui")
-gui.Name = "TeleportAndAimGUI"
+gui.Name = "AutoKillsGUI"
 gui.ResetOnSpawn = false
 
 -- Create main frame
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 200, 0, 400)
-mainFrame.Position = UDim2.new(0.8, 0, 0.5, -200)
+mainFrame.Size = UDim2.new(0, 200, 0, 100)
+mainFrame.Position = UDim2.new(0.8, 0, 0.5, -50)
 mainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 mainFrame.BorderSizePixel = 0
 mainFrame.Parent = gui
@@ -50,7 +38,7 @@ title.Size = UDim2.new(1, 0, 0, 30)
 title.Position = UDim2.new(0, 0, 0, 0)
 title.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.Text = "Game Controls"
+title.Text = "Auto Kills"
 title.TextSize = 18
 title.Font = Enum.Font.GothamBold
 title.Parent = mainFrame
@@ -60,49 +48,11 @@ local titleCorner = Instance.new("UICorner")
 titleCorner.CornerRadius = UDim.new(0, 10)
 titleCorner.Parent = title
 
--- Create player list
-local playerList = Instance.new("ScrollingFrame")
-playerList.Name = "PlayerList"
-playerList.Size = UDim2.new(0.9, 0, 0.4, 0)
-playerList.Position = UDim2.new(0.05, 0, 0.15, 0)
-playerList.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-playerList.BorderSizePixel = 0
-playerList.ScrollBarThickness = 4
-playerList.Parent = mainFrame
-
--- Add corner to player list
-local listCorner = Instance.new("UICorner")
-listCorner.CornerRadius = UDim.new(0, 10)
-listCorner.Parent = playerList
-
--- Create buttons
-local toggleButton = Instance.new("TextButton")
-toggleButton.Name = "ToggleButton"
-toggleButton.Size = UDim2.new(0.9, 0, 0, 40)
-toggleButton.Position = UDim2.new(0.05, 0, 0.6, 0)
-toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleButton.Text = "START FOLLOW"
-toggleButton.TextSize = 18
-toggleButton.Font = Enum.Font.GothamBold
-toggleButton.Parent = mainFrame
-
-local aimToggleButton = Instance.new("TextButton")
-aimToggleButton.Name = "AimToggleButton"
-aimToggleButton.Size = UDim2.new(0.9, 0, 0, 40)
-aimToggleButton.Position = UDim2.new(0.05, 0, 0.7, 0)
-aimToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-aimToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-aimToggleButton.Text = "START AUTO AIM"
-aimToggleButton.TextSize = 18
-aimToggleButton.Font = Enum.Font.GothamBold
-aimToggleButton.Parent = mainFrame
-
 -- Add Auto Kills button
 local autoKillsButton = Instance.new("TextButton")
 autoKillsButton.Name = "AutoKillsButton"
 autoKillsButton.Size = UDim2.new(0.9, 0, 0, 40)
-autoKillsButton.Position = UDim2.new(0.05, 0, 0.8, 0)
+autoKillsButton.Position = UDim2.new(0.05, 0, 0.5, 0)
 autoKillsButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
 autoKillsButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 autoKillsButton.Text = "START AUTO KILLS"
@@ -110,12 +60,10 @@ autoKillsButton.TextSize = 18
 autoKillsButton.Font = Enum.Font.GothamBold
 autoKillsButton.Parent = mainFrame
 
--- Add corners to buttons
-for _, button in pairs({toggleButton, aimToggleButton, autoKillsButton}) do
-    local buttonCorner = Instance.new("UICorner")
-    buttonCorner.CornerRadius = UDim.new(0, 10)
-    buttonCorner.Parent = button
-end
+-- Add corner to button
+local buttonCorner = Instance.new("UICorner")
+buttonCorner.CornerRadius = UDim.new(0, 10)
+buttonCorner.Parent = autoKillsButton
 
 -- Function to change character to Hunter
 local function changeToHunter()
@@ -172,7 +120,75 @@ local function useSkill(skillName)
     end
 end
 
--- Combined Auto Kills function
+-- Function to get player health
+local function getPlayerHealth(plr)
+    if plr and plr.Character then
+        local humanoid = plr.Character:FindFirstChild("Humanoid")
+        if humanoid then
+            return humanoid.Health
+        end
+    end
+    return 0
+end
+
+-- Function to find valid target
+local function findValidTarget()
+    local validTarget = nil
+    local lowestHealth = 20 -- Only target players with health below 20
+
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= player then
+            local health = getPlayerHealth(plr)
+            if health > 0 and health < lowestHealth then
+                validTarget = plr
+                lowestHealth = health
+            end
+        end
+    end
+
+    return validTarget
+end
+
+-- Function to get position behind target
+local function getPositionBehindTarget(targetCFrame)
+    return targetCFrame * CFrame.new(0, 0, DISTANCE)
+end
+
+-- Function to aim at target
+local function aimAtTarget(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character or not player.Character then
+        return
+    end
+    
+    local targetHead = targetPlayer.Character:FindFirstChild("Head")
+    local playerHead = player.Character:FindFirstChild("Head")
+    local playerHumanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+    
+    if targetHead and playerHead and playerHumanoidRootPart then
+        local targetPos = targetHead.Position
+        local playerPos = playerHead.Position
+        
+        playerHumanoidRootPart.CFrame = CFrame.lookAt(playerHumanoidRootPart.Position, targetPos)
+    end
+end
+
+-- Function to follow and attack target
+local function followAndAttackTarget(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character or not player.Character then
+        return
+    end
+
+    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local playerRoot = player.Character:FindFirstChild("HumanoidRootPart")
+    
+    if targetRoot and playerRoot then
+        local newPosition = getPositionBehindTarget(targetRoot.CFrame)
+        playerRoot.CFrame = newPosition
+        aimAtTarget(targetPlayer)
+    end
+end
+
+-- Main auto kills function
 local function toggleAutoKills()
     autoKillsEnabled = not autoKillsEnabled
     
@@ -186,6 +202,17 @@ local function toggleAutoKills()
         -- Wait a short moment for character change to complete
         task.wait(1)
         
+        -- Start main loop
+        connection = RunService.Heartbeat:Connect(function()
+            -- Find target
+            currentTarget = findValidTarget()
+            
+            if currentTarget then
+                -- Follow and aim at target
+                followAndAttackTarget(currentTarget)
+            end
+        end)
+        
         -- Start skill loops
         local skillNames = {
             "Flowing Water",
@@ -196,23 +223,38 @@ local function toggleAutoKills()
         for _, skillName in ipairs(skillNames) do
             local thread = task.spawn(function()
                 while autoKillsEnabled do
-                    useSkill(skillName)
+                    if currentTarget then -- Only use skills if we have a target
+                        useSkill(skillName)
+                    end
                     task.wait()
                 end
             end)
             table.insert(skillThreads, thread)
         end
         
-        -- Start auto M1 (chỉ click một lần và giữ)
+        -- Start auto M1 (only when we have a target)
         m1Thread = task.spawn(function()
-            performM1Click()
+            while autoKillsEnabled do
+                if currentTarget then
+                    performM1Click()
+                else
+                    releaseM1Click()
+                end
+                task.wait(0.1)
+            end
         end)
     else
         autoKillsButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
         autoKillsButton.Text = "START AUTO KILLS"
         
-        -- Release M1 first
+        -- Release M1
         releaseM1Click()
+        
+        -- Stop main loop
+        if connection then
+            connection:Disconnect()
+            connection = nil
+        end
         
         -- Stop skill threads
         for _, thread in ipairs(skillThreads) do
@@ -225,152 +267,8 @@ local function toggleAutoKills()
             task.cancel(m1Thread)
             m1Thread = nil
         end
-    end
-end
-
--- Handle zoom function
-local function handleZoom()
-    UserInputService.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseWheel then
-            if input.Position.Z > 0 then
-                currentZoom = math.max(MIN_ZOOM, currentZoom - ZOOM_SPEED)
-            else
-                currentZoom = math.min(MAX_ZOOM, currentZoom + ZOOM_SPEED)
-            end
-        end
-    end)
-end
-
--- Function to update player list
-local function updatePlayerList()
-    for _, child in pairs(playerList:GetChildren()) do
-        if child:IsA("TextButton") then
-            child:Destroy()
-        end
-    end
-    
-    local yPosition = 5
-    for _, plr in pairs(Players:GetPlayers()) do
-        if plr ~= player then
-            local button = Instance.new("TextButton")
-            button.Size = UDim2.new(0.9, 0, 0, 30)
-            button.Position = UDim2.new(0.05, 0, 0, yPosition)
-            button.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
-            button.TextColor3 = Color3.fromRGB(255, 255, 255)
-            button.Text = plr.Name
-            button.TextSize = 14
-            button.Font = Enum.Font.Gotham
-            button.Parent = playerList
-            
-            local playerButtonCorner = Instance.new("UICorner")
-            playerButtonCorner.CornerRadius = UDim.new(0, 5)
-            playerButtonCorner.Parent = button
-            
-            button.MouseButton1Click:Connect(function()
-                targetPlayer = plr
-                for _, btn in pairs(playerList:GetChildren()) do
-                    if btn:IsA("TextButton") then
-                        btn.BackgroundColor3 = btn == button and Color3.fromRGB(0, 120, 255) or Color3.fromRGB(55, 55, 55)
-                    end
-                end
-            end)
-            
-            yPosition = yPosition + 35
-        end
-    end
-    
-    playerList.CanvasSize = UDim2.new(0, 0, 0, yPosition)
-end
-
--- Function to get position behind target
-local function getPositionBehindTarget(targetCFrame)
-    return targetCFrame * CFrame.new(0, 0, DISTANCE)
-end
-
--- Function to aim at target
-local function aimAtTarget()
-    if not targetPlayer or not targetPlayer.Character or not player.Character then
-        return
-    end
-    
-    local targetHead = targetPlayer.Character:FindFirstChild("Head")
-    local playerHead = player.Character:FindFirstChild("Head")
-    local playerHumanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-    
-    if targetHead and playerHead and playerHumanoidRootPart then
-        local camera = workspace.CurrentCamera
-        local targetPos = targetHead.Position
-        local playerPos = playerHead.Position
         
-        local lookVector = (targetPos - playerPos).Unit
-        playerHumanoidRootPart.CFrame = CFrame.lookAt(playerHumanoidRootPart.Position, targetPos)
-        
-        local cameraPos = playerPos - lookVector * currentZoom
-        camera.CFrame = CFrame.new(cameraPos, targetPos)
-    end
-end
-
--- Toggle teleport function
-local function toggleTeleport()
-    isEnabled = not isEnabled
-    
-    if isEnabled then
-        if targetPlayer then
-            toggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-            toggleButton.Text = "STOP FOLLOW"
-            
-            connection = RunService.Heartbeat:Connect(function()
-                if not targetPlayer or not targetPlayer.Character or not player.Character then
-                    return
-                end
-                
-                local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-                local playerRoot = player.Character:FindFirstChild("HumanoidRootPart")
-                
-                if targetRoot and playerRoot then
-                    local newPosition = getPositionBehindTarget(targetRoot.CFrame)
-                    playerRoot.CFrame = newPosition
-                end
-            end)
-        else
-            isEnabled = false
-            toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-            toggleButton.Text = "SELECT PLAYER"
-        end
-    else
-        if connection then
-            connection:Disconnect()
-            connection = nil
-        end
-        toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-        toggleButton.Text = "START FOLLOW"
-    end
-end
-
--- Toggle aimbot function
-local function toggleAimbot()
-    isAimbotEnabled = not isAimbotEnabled
-    
-    if isAimbotEnabled then
-        if targetPlayer then
-            aimToggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-            aimToggleButton.Text = "STOP AUTO AIM"
-            
-            aimConnection = RunService.RenderStepped:Connect(function()
-                aimAtTarget()
-            end)
-        else
-            isAimbotEnabled = false
-            aimToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-            aimToggleButton.Text = "SELECT PLAYER"
-        end
-    else
-        if aimConnection then
-            aimConnection:Disconnect()
-            aimConnection = nil
-        end
-        aimToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-        aimToggleButton.Text = "START AUTO AIM"
+        currentTarget = nil
     end
 end
 
@@ -412,20 +310,8 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- Connect buttons
-toggleButton.MouseButton1Click:Connect(toggleTeleport)
-aimToggleButton.MouseButton1Click:Connect(toggleAimbot)
+-- Connect button
 autoKillsButton.MouseButton1Click:Connect(toggleAutoKills)
-
--- Initialize zoom handling
-handleZoom()
-
--- Update player list when players join/leave
-Players.PlayerAdded:Connect(updatePlayerList)
-Players.PlayerRemoving:Connect(updatePlayerList)
-
--- Initial player list update
-updatePlayerList()
 
 -- Parent GUI to PlayerGui
 gui.Parent = player:WaitForChild("PlayerGui")
@@ -434,9 +320,6 @@ gui.Parent = player:WaitForChild("PlayerGui")
 script.Destroyed:Connect(function()
     if connection then
         connection:Disconnect()
-    end
-    if aimConnection then
-        aimConnection:Disconnect()
     end
     if m1Thread then
         task.cancel(m1Thread)
