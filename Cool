@@ -81,7 +81,7 @@ local function changeToHunter()
     local args = {
         [1] = {
             ["Goal"] = "Change Character",
-            ["Character"] = "Ninja"
+            ["Character"] = "Hunter"
         }
     }
     if player.Character and player.Character:FindFirstChild("Communicate") then
@@ -234,10 +234,10 @@ local function toggleAutoKills()
         
         -- Start skill loops
         local skillNames = {
-            "Flash Strike",
-            "Whirlwind Kick",
-            "Scatter",
-            "Explosive Shuriken"
+            "Flowing Water",
+            "Lethal Whirlwind Stream",
+            "Hunter's Grasp",
+            "Prey's Peril"
         }
         
         for _, skillName in ipairs(skillNames) do
