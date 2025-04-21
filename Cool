@@ -9,7 +9,7 @@ local connection = nil
 local aimConnection = nil
 
 local targetPlayer = nil
-local DISTANCE = 3
+local DISTANCE = 10
 local isEnabled = false
 local isAimbotEnabled = false
 
@@ -22,6 +22,7 @@ local ZOOM_SPEED = 2
 -- Variables for Auto Kills
 local autoKillsEnabled = false
 local skillThreads = {}
+local m1Thread = nil
 
 -- Create ScreenGui
 local gui = Instance.new("ScreenGui")
@@ -129,6 +130,29 @@ local function changeToHunter()
     end
 end
 
+-- Function to perform M1 click
+local function performM1Click()
+    local args1 = {
+        [1] = {
+            ["Mobile"] = true,
+            ["Goal"] = "LeftClick"
+        }
+    }
+    
+    local args2 = {
+        [1] = {
+            ["Goal"] = "LeftClickRelease",
+            ["Mobile"] = true
+        }
+    }
+    
+    if player.Character and player.Character:FindFirstChild("Communicate") then
+        player.Character.Communicate:FireServer(unpack(args1))
+        task.wait(0.1)
+        player.Character.Communicate:FireServer(unpack(args2))
+    end
+end
+
 -- Function to use skill
 local function useSkill(skillName)
     local args = {
@@ -173,6 +197,14 @@ local function toggleAutoKills()
             end)
             table.insert(skillThreads, thread)
         end
+        
+        -- Start auto M1
+        m1Thread = task.spawn(function()
+            while autoKillsEnabled do
+                performM1Click()
+                task.wait(0.1)
+            end
+        end)
     else
         autoKillsButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
         autoKillsButton.Text = "START AUTO KILLS"
@@ -182,6 +214,12 @@ local function toggleAutoKills()
             task.cancel(thread)
         end
         skillThreads = {}
+        
+        -- Stop M1 thread
+        if m1Thread then
+            task.cancel(m1Thread)
+            m1Thread = nil
+        end
     end
 end
 
@@ -377,7 +415,7 @@ autoKillsButton.MouseButton1Click:Connect(toggleAutoKills)
 -- Initialize zoom handling
 handleZoom()
 
--- Update player list when players join/leave 
+-- Update player list when players join/leave
 Players.PlayerAdded:Connect(updatePlayerList)
 Players.PlayerRemoving:Connect(updatePlayerList)
 
@@ -394,6 +432,9 @@ script.Destroyed:Connect(function()
     end
     if aimConnection then
         aimConnection:Disconnect()
+    end
+    if m1Thread then
+        task.cancel(m1Thread)
     end
     for _, thread in ipairs(skillThreads) do
         task.cancel(thread)
