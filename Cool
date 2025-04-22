@@ -10,7 +10,7 @@ local autoKillsEnabled = false
 local skillThreads = {}
 local m1Thread = nil
 local currentTarget = nil
-local DISTANCE = 1
+local DISTANCE = 3
 local WAITING_POSITION = Vector3.new(1064, 131.51, 23007)
 
 -- Create ScreenGui
@@ -39,7 +39,7 @@ title.Size = UDim2.new(1, 0, 0, 30)
 title.Position = UDim2.new(0, 0, 0, 0)
 title.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.Text = "Auto Kills"
+title.Text = "Auto Farm Kills"
 title.TextSize = 18
 title.Font = Enum.Font.GothamBold
 title.Parent = mainFrame
@@ -81,7 +81,7 @@ local function changeToHunter()
     local args = {
         [1] = {
             ["Goal"] = "Change Character",
-            ["Character"] = "Hunter"
+            ["Character"] = "Ninja"
         }
     }
     if player.Character and player.Character:FindFirstChild("Communicate") then
@@ -155,7 +155,7 @@ local function findValidTarget()
 
     -- Find new target if current target is invalid
     local validTarget = nil
-    local lowestHealth = 20 -- Only target players with health below 20
+    local lowestHealth = 100 -- Only target players with health below 20
 
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= player then
