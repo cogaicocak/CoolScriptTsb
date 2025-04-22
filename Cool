@@ -10,7 +10,7 @@ local autoKillsEnabled = false
 local skillThreads = {}
 local m1Thread = nil
 local currentTarget = nil
-local DISTANCE = 3
+local DISTANCE = 5
 local WAITING_POSITION = Vector3.new(1064, 131.51, 23007)
 
 -- Create ScreenGui
@@ -155,7 +155,7 @@ local function findValidTarget()
 
     -- Find new target if current target is invalid
     local validTarget = nil
-    local lowestHealth = 100 -- Only target players with health below 20
+    local lowestHealth = 101 -- Only target players with health below 20
 
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= player then
