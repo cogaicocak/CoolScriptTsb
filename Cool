@@ -188,18 +188,34 @@ local function aimAtTarget(targetPlayer)
         return
     end
     
-    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-    local playerRoot = player.Character:FindFirstChild("HumanoidRootPart")
+    local targetHead = targetPlayer.Character:FindFirstChild("Head")
+    local playerHead = player.Character:FindFirstChild("Head")
+    local playerHumanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
     
-    if targetRoot and playerRoot then
-        -- Tính toán vị trí với dự đoán chuyển động
-        local targetVelocity = targetRoot.Velocity
-        local predictionOffset = targetVelocity * 0.165
-        local targetPosition = targetRoot.Position + predictionOffset
+    if targetHead and playerHead and playerHumanoidRootPart then
+        local camera = workspace.CurrentCamera
+        local targetPos = targetHead.Position
+        local playerPos = playerHead.Position
         
-        -- Cập nhật CFrame trực tiếp để nhìn vào target
-        playerRoot.CFrame = CFrame.new(playerRoot.Position, targetPosition)
+        -- Tính toán vector hướng từ player đến target
+        local lookVector = (targetPos - playerPos).Unit
+        
+        -- Tạo CFrame mới cho nhân vật, luôn hướng về target
+        playerHumanoidRootPart.CFrame = CFrame.lookAt(playerHumanoidRootPart.Position, targetPos)
     end
+end
+
+-- Function to get position behind target
+local function getPositionBehindTarget(targetCFrame)
+    -- Tạo một vector hướng từ target ra phía sau
+    local lookVector = targetCFrame.LookVector
+    local targetPosition = targetCFrame.Position
+    
+    -- Tính toán vị trí phía sau target
+    local behindPosition = targetPosition - (lookVector * DISTANCE)
+    
+    -- Tạo CFrame mới với vị trí phía sau và hướng nhìn về phía target
+    return CFrame.new(behindPosition, targetPosition)
 end
 
 -- Function to follow and attack target
@@ -212,15 +228,12 @@ local function followAndAttackTarget(targetPlayer)
     local playerRoot = player.Character:FindFirstChild("HumanoidRootPart")
     
     if targetRoot and playerRoot then
-        -- Tính vị trí phía sau target
-        local direction = (targetRoot.Position - playerRoot.Position).Unit
-        local behindPosition = targetRoot.Position + direction * DISTANCE
+        -- Teleport phía sau target
+        local newPosition = getPositionBehindTarget(targetRoot.CFrame)
+        playerRoot.CFrame = newPosition
         
-        -- Tạo CFrame mới với vị trí phía sau và hướng nhìn về target
-        local newCFrame = CFrame.new(behindPosition, targetRoot.Position)
-        
-        -- Cập nhật vị trí và hướng nhìn
-        playerRoot.CFrame = newCFrame
+        -- Aim vào target
+        aimAtTarget(targetPlayer)
     end
 end
 
@@ -232,25 +245,34 @@ local function toggleAutoKills()
         autoKillsButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
         autoKillsButton.Text = "STOP AUTO KILLS"
         
+        -- Change to Hunter first
         changeToHunter()
+        
+        -- Wait a short moment for character change to complete
         task.wait(1)
+        
+        -- Move to waiting position initially
         moveToWaitingPosition()
         
-        -- Main loop với tần suất cao hơn
-        connection = RunService.Heartbeat:Connect(function()
+        -- Start main loop with RenderStepped for smoother aiming
+        connection = RunService.RenderStepped:Connect(function()
+            -- Find target
             currentTarget = findValidTarget()
             
             if currentTarget then
+                -- Follow and aim at target until they die
                 followAndAttackTarget(currentTarget)
-                -- Cập nhật hướng nhìn liên tục
-                updateFacing()
+                -- Continuously aim at target
+                aimAtTarget(currentTarget)
             else
+                -- Only return to waiting position if no valid target
                 moveToWaitingPosition()
+                -- Release M1 while waiting
                 releaseM1Click()
             end
         end)
         
-        -- Skill list
+        -- Start skill loops
         local skillNames = {
             "Flowing Water",
             "Lethal Whirlwind Stream",
@@ -284,6 +306,7 @@ local function toggleAutoKills()
             "Head First"
         }
         
+        -- Start skill threads
         for _, skillName in ipairs(skillNames) do
             local thread = task.spawn(function()
                 while autoKillsEnabled do
@@ -296,6 +319,7 @@ local function toggleAutoKills()
             table.insert(skillThreads, thread)
         end
         
+        -- Start auto M1 thread
         m1Thread = task.spawn(function()
             while autoKillsEnabled do
                 if currentTarget then
@@ -307,26 +331,32 @@ local function toggleAutoKills()
             end
         end)
     else
+        -- Disable auto kills
         autoKillsButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
         autoKillsButton.Text = "START AUTO KILLS"
         
+        -- Release M1
         releaseM1Click()
         
+        -- Stop main loop
         if connection then
             connection:Disconnect()
             connection = nil
         end
         
+        -- Stop skill threads
         for _, thread in ipairs(skillThreads) do
             task.cancel(thread)
         end
         skillThreads = {}
         
+        -- Stop M1 thread
         if m1Thread then
             task.cancel(m1Thread)
             m1Thread = nil
         end
         
+        -- Clear current target
         currentTarget = nil
     end
 end
