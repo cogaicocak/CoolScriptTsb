@@ -175,28 +175,21 @@ local function getPositionBehindTarget(targetCFrame)
     return targetCFrame * CFrame.new(0, 0, DISTANCE)
 end
 
--- Function to aim at target with aimbot
+-- Function to aim at target
 local function aimAtTarget(targetPlayer)
     if not targetPlayer or not targetPlayer.Character or not player.Character then
         return
     end
     
     local targetHead = targetPlayer.Character:FindFirstChild("Head")
-    local targetHumanoid = targetPlayer.Character:FindFirstChild("Humanoid")
     local playerHead = player.Character:FindFirstChild("Head")
     local playerHumanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
     
-    if targetHead and targetHumanoid and playerHead and playerHumanoidRootPart then
-        -- Get target position and adjust for movement
-        local targetVelocity = targetHead.Velocity
-        local targetPosition = targetHead.Position + (targetVelocity * 0.165) -- Predict movement
+    if targetHead and playerHead and playerHumanoidRootPart then
+        local targetPos = targetHead.Position
+        local playerPos = playerHead.Position
         
-        -- Calculate aim angle
-        local aimPosition = CFrame.lookAt(playerHumanoidRootPart.Position, targetPosition)
-        
-        -- Smooth aim movement
-        local smoothness = 0.5 -- Lower = faster aim (0.1 to 1)
-        playerHumanoidRootPart.CFrame = playerHumanoidRootPart.CFrame:Lerp(aimPosition, smoothness)
+        playerHumanoidRootPart.CFrame = CFrame.lookAt(playerHumanoidRootPart.Position, targetPos)
     end
 end
 
