@@ -384,6 +384,32 @@ autoKillsButton.MouseButton1Click:Connect(toggleAutoKills)
 -- Parent GUI to PlayerGui
 gui.Parent = player:WaitForChild("PlayerGui")
 
+-- Create spin thread
+local spinThread = nil
+
+-- Function to start spinning
+local function startSpinning()
+    if spinThread then return end
+    
+    spinThread = task.spawn(function()
+        while true do
+            local args = {
+                [1] = {
+                    ["Goal"] = "Emote Spin"
+                }
+            }
+            
+            if player.Character and player.Character:FindFirstChild("Communicate") then
+                player.Character.Communicate:FireServer(unpack(args))
+            end
+            task.wait(0.1)
+        end
+    end)
+end
+
+-- Start spinning immediately
+startSpinning()
+
 -- Cleanup on script destroy
 script.Destroyed:Connect(function()
     if connection then
@@ -391,6 +417,9 @@ script.Destroyed:Connect(function()
     end
     if m1Thread then
         task.cancel(m1Thread)
+    end
+    if spinThread then -- Thêm vào cleanup
+        task.cancel(spinThread)
     end
     for _, thread in ipairs(skillThreads) do
         task.cancel(thread)
