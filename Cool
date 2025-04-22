@@ -144,18 +144,15 @@ end
 
 -- Function to find valid target
 local function findValidTarget()
-    -- If we have a current target, check if we should keep targeting them
     if currentTarget then
         local health = getPlayerHealth(currentTarget)
-        -- Only drop target if they die (health = 0)
         if health > 0 then
-            return currentTarget -- Continue targeting current target
+            return currentTarget
         end
     end
 
-    -- Find new target if current target is invalid
     local validTarget = nil
-    local lowestHealth = 20 -- Only target players with health below 20
+    local lowestHealth = 20
 
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= player then
@@ -170,42 +167,40 @@ local function findValidTarget()
     return validTarget
 end
 
--- Function to get position behind target
+-- Improved function to get position behind target
 local function getPositionBehindTarget(targetCFrame)
-    return targetCFrame * CFrame.new(0, 0, DISTANCE)
+    local behind = targetCFrame * CFrame.new(0, 0, DISTANCE)
+    return CFrame.lookAt(behind.Position, targetCFrame.Position)
 end
 
--- Function to aim at target with aimbot
+-- Improved function to aim at target
 local function aimAtTarget(targetPlayer)
     if not targetPlayer or not targetPlayer.Character or not player.Character then
         return
     end
     
     local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-    local targetHumanoid = targetPlayer.Character:FindFirstChild("Humanoid")
     local playerRoot = player.Character:FindFirstChild("HumanoidRootPart")
     
-    if targetRoot and targetHumanoid and playerRoot then
-        -- Dự đoán chuyển động
+    if targetRoot and playerRoot then
+        -- Tính toán vị trí với dự đoán chuyển động
         local targetVelocity = targetRoot.Velocity
         local predictionOffset = targetVelocity * 0.165
         local targetPosition = targetRoot.Position + predictionOffset
         
-        -- Tính toán góc nhắm
-        local toTarget = (targetPosition - playerRoot.Position)
-        local aimCFrame = CFrame.lookAt(playerRoot.Position, targetPosition)
+        -- Tạo CFrame nhìn về phía target
+        local lookAt = CFrame.lookAt(playerRoot.Position, targetPosition)
         
-        -- Smooth aiming với độ trễ thấp hơn
-        local smoothness = 0.3 -- Giảm xuống để aim nhanh hơn
-        playerRoot.CFrame = playerRoot.CFrame:Lerp(aimCFrame, smoothness)
+        -- Tăng tốc độ xoay (giảm độ trễ)
+        local smoothness = 0.5
         
-        -- Tự động điều chỉnh góc nhìn
-        local lookVector = (targetPosition - playerRoot.Position).Unit
-        playerRoot.CFrame = CFrame.new(playerRoot.Position, playerRoot.Position + lookVector)
+        -- Áp dụng rotation mới nhưng giữ nguyên position
+        playerRoot.CFrame = CFrame.new(playerRoot.Position) * 
+            playerRoot.CFrame.Rotation:Lerp(lookAt.Rotation, smoothness)
     end
 end
 
--- Function to follow and attack target
+-- Improved function to follow and attack target
 local function followAndAttackTarget(targetPlayer)
     if not targetPlayer or not targetPlayer.Character or not player.Character then
         return
@@ -215,8 +210,16 @@ local function followAndAttackTarget(targetPlayer)
     local playerRoot = player.Character:FindFirstChild("HumanoidRootPart")
     
     if targetRoot and playerRoot then
-        local newPosition = getPositionBehindTarget(targetRoot.CFrame)
-        playerRoot.CFrame = newPosition
+        -- Lấy vị trí và hướng nhìn mới
+        local behindPosition = getPositionBehindTarget(targetRoot.CFrame)
+        
+        -- Set position và rotation cùng lúc
+        playerRoot.CFrame = behindPosition
+        
+        -- Thêm delay nhỏ để ổn định
+        task.wait(0.05)
+        
+        -- Tiếp tục aim để theo dõi target
         aimAtTarget(targetPlayer)
     end
 end
@@ -229,32 +232,22 @@ local function toggleAutoKills()
         autoKillsButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
         autoKillsButton.Text = "STOP AUTO KILLS"
         
-        -- Change to Hunter first
         changeToHunter()
-        
-        -- Wait a short moment for character change to complete
         task.wait(1)
-        
-        -- Move to waiting position initially
         moveToWaitingPosition()
         
-        -- Start main loop
         connection = RunService.Heartbeat:Connect(function()
-            -- Find target
             currentTarget = findValidTarget()
             
             if currentTarget then
-                -- Follow and aim at target until they die
                 followAndAttackTarget(currentTarget)
             else
-                -- Only return to waiting position if no valid target
                 moveToWaitingPosition()
-                -- Release M1 while waiting
                 releaseM1Click()
             end
         end)
         
-        -- Start skill loops
+        -- Skill list
         local skillNames = {
             "Flowing Water",
             "Lethal Whirlwind Stream",
@@ -291,7 +284,7 @@ local function toggleAutoKills()
         for _, skillName in ipairs(skillNames) do
             local thread = task.spawn(function()
                 while autoKillsEnabled do
-                    if currentTarget then -- Only use skills if we have a target
+                    if currentTarget then
                         useSkill(skillName)
                     end
                     task.wait()
@@ -300,7 +293,6 @@ local function toggleAutoKills()
             table.insert(skillThreads, thread)
         end
         
-        -- Start auto M1 (only when we have a target)
         m1Thread = task.spawn(function()
             while autoKillsEnabled do
                 if currentTarget then
@@ -315,22 +307,18 @@ local function toggleAutoKills()
         autoKillsButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
         autoKillsButton.Text = "START AUTO KILLS"
         
-        -- Release M1
         releaseM1Click()
         
-        -- Stop main loop
         if connection then
             connection:Disconnect()
             connection = nil
         end
         
-        -- Stop skill threads
         for _, thread in ipairs(skillThreads) do
             task.cancel(thread)
         end
         skillThreads = {}
         
-        -- Stop M1 thread
         if m1Thread then
             task.cancel(m1Thread)
             m1Thread = nil
@@ -418,7 +406,7 @@ script.Destroyed:Connect(function()
     if m1Thread then
         task.cancel(m1Thread)
     end
-    if spinThread then -- Thêm vào cleanup
+    if spinThread then
         task.cancel(spinThread)
     end
     for _, thread in ipairs(skillThreads) do
