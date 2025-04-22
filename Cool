@@ -155,7 +155,7 @@ local function findValidTarget()
 
     -- Find new target if current target is invalid
     local validTarget = nil
-    local lowestHealth = 101 -- Only target players with health below 20
+    local lowestHealth = 20 -- Only target players with health below 20
 
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= player then
@@ -175,21 +175,33 @@ local function getPositionBehindTarget(targetCFrame)
     return targetCFrame * CFrame.new(0, 0, DISTANCE)
 end
 
--- Function to aim at target
+-- Function to aim at target with aimbot
 local function aimAtTarget(targetPlayer)
     if not targetPlayer or not targetPlayer.Character or not player.Character then
         return
     end
     
-    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart") -- Thay đổi từ Head sang HumanoidRootPart
-    local playerHead = player.Character:FindFirstChild("Head")
-    local playerHumanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local targetHumanoid = targetPlayer.Character:FindFirstChild("Humanoid")
+    local playerRoot = player.Character:FindFirstChild("HumanoidRootPart")
     
-    if targetRoot and playerHead and playerHumanoidRootPart then
-        local targetPos = targetRoot.Position -- Nhắm vào thân thay vì đầu
-        local playerPos = playerHead.Position
+    if targetRoot and targetHumanoid and playerRoot then
+        -- Dự đoán chuyển động
+        local targetVelocity = targetRoot.Velocity
+        local predictionOffset = targetVelocity * 0.165
+        local targetPosition = targetRoot.Position + predictionOffset
         
-        playerHumanoidRootPart.CFrame = CFrame.lookAt(playerHumanoidRootPart.Position, targetPos)
+        -- Tính toán góc nhắm
+        local toTarget = (targetPosition - playerRoot.Position)
+        local aimCFrame = CFrame.lookAt(playerRoot.Position, targetPosition)
+        
+        -- Smooth aiming với độ trễ thấp hơn
+        local smoothness = 0.3 -- Giảm xuống để aim nhanh hơn
+        playerRoot.CFrame = playerRoot.CFrame:Lerp(aimCFrame, smoothness)
+        
+        -- Tự động điều chỉnh góc nhìn
+        local lookVector = (targetPosition - playerRoot.Position).Unit
+        playerRoot.CFrame = CFrame.new(playerRoot.Position, playerRoot.Position + lookVector)
     end
 end
 
