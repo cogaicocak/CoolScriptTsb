@@ -167,13 +167,22 @@ local function findValidTarget()
     return validTarget
 end
 
--- Improved function to get position behind target
-local function getPositionBehindTarget(targetCFrame)
-    local behind = targetCFrame * CFrame.new(0, 0, DISTANCE)
-    return CFrame.lookAt(behind.Position, targetCFrame.Position)
+-- Function to update facing direction
+local function updateFacing()
+    if not currentTarget or not currentTarget.Character or not player.Character then
+        return
+    end
+
+    local targetRoot = currentTarget.Character:FindFirstChild("HumanoidRootPart")
+    local playerRoot = player.Character:FindFirstChild("HumanoidRootPart")
+    
+    if targetRoot and playerRoot then
+        -- Luôn cập nhật hướng nhìn về phía target
+        playerRoot.CFrame = CFrame.new(playerRoot.Position, targetRoot.Position)
+    end
 end
 
--- Improved function to aim at target
+-- Function to aim at target
 local function aimAtTarget(targetPlayer)
     if not targetPlayer or not targetPlayer.Character or not player.Character then
         return
@@ -188,19 +197,12 @@ local function aimAtTarget(targetPlayer)
         local predictionOffset = targetVelocity * 0.165
         local targetPosition = targetRoot.Position + predictionOffset
         
-        -- Tạo CFrame nhìn về phía target
-        local lookAt = CFrame.lookAt(playerRoot.Position, targetPosition)
-        
-        -- Tăng tốc độ xoay (giảm độ trễ)
-        local smoothness = 0.5
-        
-        -- Áp dụng rotation mới nhưng giữ nguyên position
-        playerRoot.CFrame = CFrame.new(playerRoot.Position) * 
-            playerRoot.CFrame.Rotation:Lerp(lookAt.Rotation, smoothness)
+        -- Cập nhật CFrame trực tiếp để nhìn vào target
+        playerRoot.CFrame = CFrame.new(playerRoot.Position, targetPosition)
     end
 end
 
--- Improved function to follow and attack target
+-- Function to follow and attack target
 local function followAndAttackTarget(targetPlayer)
     if not targetPlayer or not targetPlayer.Character or not player.Character then
         return
@@ -210,17 +212,15 @@ local function followAndAttackTarget(targetPlayer)
     local playerRoot = player.Character:FindFirstChild("HumanoidRootPart")
     
     if targetRoot and playerRoot then
-        -- Lấy vị trí và hướng nhìn mới
-        local behindPosition = getPositionBehindTarget(targetRoot.CFrame)
+        -- Tính vị trí phía sau target
+        local direction = (targetRoot.Position - playerRoot.Position).Unit
+        local behindPosition = targetRoot.Position + direction * DISTANCE
         
-        -- Set position và rotation cùng lúc
-        playerRoot.CFrame = behindPosition
+        -- Tạo CFrame mới với vị trí phía sau và hướng nhìn về target
+        local newCFrame = CFrame.new(behindPosition, targetRoot.Position)
         
-        -- Thêm delay nhỏ để ổn định
-        task.wait(0.05)
-        
-        -- Tiếp tục aim để theo dõi target
-        aimAtTarget(targetPlayer)
+        -- Cập nhật vị trí và hướng nhìn
+        playerRoot.CFrame = newCFrame
     end
 end
 
@@ -236,11 +236,14 @@ local function toggleAutoKills()
         task.wait(1)
         moveToWaitingPosition()
         
+        -- Main loop với tần suất cao hơn
         connection = RunService.Heartbeat:Connect(function()
             currentTarget = findValidTarget()
             
             if currentTarget then
                 followAndAttackTarget(currentTarget)
+                -- Cập nhật hướng nhìn liên tục
+                updateFacing()
             else
                 moveToWaitingPosition()
                 releaseM1Click()
