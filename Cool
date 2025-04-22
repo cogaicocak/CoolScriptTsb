@@ -10,9 +10,8 @@ local autoKillsEnabled = false
 local skillThreads = {}
 local m1Thread = nil
 local currentTarget = nil
-local DISTANCE = 0
+local DISTANCE = 1
 local WAITING_POSITION = Vector3.new(1064, 131.51, 23007)
-local deathCounterPlayers = {} -- Lưu thời gian bắt đầu của Death Counter cho mỗi người chơi
 
 -- Create ScreenGui
 local gui = Instance.new("ScreenGui")
@@ -143,56 +142,13 @@ local function getPlayerHealth(plr)
     return 0
 end
 
--- Function to check if player has Death Counter
-local function hasDeathCounter(plr)
-    -- Check Backpack
-    if plr and plr:FindFirstChild("Backpack") then
-        if plr.Backpack:FindFirstChild("Death Counter") then
-            return true
-        end
-    end
-    
-    -- Check Character (for equipped items)
-    if plr and plr.Character then
-        if plr.Character:FindFirstChild("Death Counter") then
-            return true
-        end
-    end
-    
-    return false
-end
-
--- Function to check Death Counter protection
-local function isProtectedByDeathCounter(plr)
-    if not deathCounterPlayers[plr.Name] then
-        -- If player not tracked and has Death Counter, start tracking
-        if hasDeathCounter(plr) then
-            deathCounterPlayers[plr.Name] = os.time()
-            return true
-        end
-        return false
-    end
-
-    -- Calculate time passed since Death Counter appeared
-    local timePassed = os.time() - deathCounterPlayers[plr.Name]
-    
-    -- Remove from tracking if no longer has Death Counter
-    if not hasDeathCounter(plr) then
-        deathCounterPlayers[plr.Name] = nil
-        return false
-    end
-    
-    -- Protected for 11 seconds
-    return timePassed <= 11
-end
-
 -- Function to find valid target
 local function findValidTarget()
     -- If we have a current target, check if we should keep targeting them
     if currentTarget then
         local health = getPlayerHealth(currentTarget)
-        -- Check Death Counter protection and health
-        if health > 0 and not isProtectedByDeathCounter(currentTarget) then
+        -- Only drop target if they die (health = 0)
+        if health > 0 then
             return currentTarget -- Continue targeting current target
         end
     end
@@ -203,13 +159,10 @@ local function findValidTarget()
 
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= player then
-            -- Check Death Counter protection instead of just Death Counter
-            if not isProtectedByDeathCounter(plr) then
-                local health = getPlayerHealth(plr)
-                if health > 0 and health < lowestHealth then
-                    validTarget = plr
-                    lowestHealth = health
-                end
+            local health = getPlayerHealth(plr)
+            if health > 0 and health < lowestHealth then
+                validTarget = plr
+                lowestHealth = health
             end
         end
     end
@@ -222,21 +175,28 @@ local function getPositionBehindTarget(targetCFrame)
     return targetCFrame * CFrame.new(0, 0, DISTANCE)
 end
 
--- Function to aim at target
+-- Function to aim at target with aimbot
 local function aimAtTarget(targetPlayer)
     if not targetPlayer or not targetPlayer.Character or not player.Character then
         return
     end
     
     local targetHead = targetPlayer.Character:FindFirstChild("Head")
+    local targetHumanoid = targetPlayer.Character:FindFirstChild("Humanoid")
     local playerHead = player.Character:FindFirstChild("Head")
     local playerHumanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
     
-    if targetHead and playerHead and playerHumanoidRootPart then
-        local targetPos = targetHead.Position
-        local playerPos = playerHead.Position
+    if targetHead and targetHumanoid and playerHead and playerHumanoidRootPart then
+        -- Get target position and adjust for movement
+        local targetVelocity = targetHead.Velocity
+        local targetPosition = targetHead.Position + (targetVelocity * 0.165) -- Predict movement
         
-        playerHumanoidRootPart.CFrame = CFrame.lookAt(playerHumanoidRootPart.Position, targetPos)
+        -- Calculate aim angle
+        local aimPosition = CFrame.lookAt(playerHumanoidRootPart.Position, targetPosition)
+        
+        -- Smooth aim movement
+        local smoothness = 0.5 -- Lower = faster aim (0.1 to 1)
+        playerHumanoidRootPart.CFrame = playerHumanoidRootPart.CFrame:Lerp(aimPosition, smoothness)
     end
 end
 
@@ -261,9 +221,6 @@ local function toggleAutoKills()
     autoKillsEnabled = not autoKillsEnabled
     
     if autoKillsEnabled then
-        -- Reset Death Counter tracking
-        deathCounterPlayers = {}
-        
         autoKillsButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
         autoKillsButton.Text = "STOP AUTO KILLS"
         
