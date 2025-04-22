@@ -11,6 +11,13 @@ local skillThreads = {}
 local m1Thread = nil
 local currentTarget = nil
 local DISTANCE = 3
+
+-- Zoom variables (từ script 2)
+local MIN_ZOOM = 5
+local MAX_ZOOM = 50
+local currentZoom = 20
+local ZOOM_SPEED = 2
+
 local WAITING_POSITION = Vector3.new(1064, 131.51, 23007)
 
 -- Create ScreenGui
@@ -65,6 +72,19 @@ autoKillsButton.Parent = mainFrame
 local buttonCorner = Instance.new("UICorner")
 buttonCorner.CornerRadius = UDim.new(0, 10)
 buttonCorner.Parent = autoKillsButton
+
+-- Handle zoom function (từ script 2)
+local function handleZoom()
+    UserInputService.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseWheel then
+            if input.Position.Z > 0 then
+                currentZoom = math.max(MIN_ZOOM, currentZoom - ZOOM_SPEED)
+            else
+                currentZoom = math.min(MAX_ZOOM, currentZoom + ZOOM_SPEED)
+            end
+        end
+    end)
+end
 
 -- Function to move to waiting position
 local function moveToWaitingPosition()
@@ -144,15 +164,18 @@ end
 
 -- Function to find valid target
 local function findValidTarget()
+    -- If we have a current target, check if we should keep targeting them
     if currentTarget then
         local health = getPlayerHealth(currentTarget)
+        -- Only drop target if they die (health = 0)
         if health > 0 then
-            return currentTarget
+            return currentTarget -- Continue targeting current target
         end
     end
 
+    -- Find new target if current target is invalid
     local validTarget = nil
-    local lowestHealth = 20
+    local lowestHealth = 20 -- Only target players with health below 20
 
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= player then
@@ -167,22 +190,12 @@ local function findValidTarget()
     return validTarget
 end
 
--- Function to update facing direction
-local function updateFacing()
-    if not currentTarget or not currentTarget.Character or not player.Character then
-        return
-    end
-
-    local targetRoot = currentTarget.Character:FindFirstChild("HumanoidRootPart")
-    local playerRoot = player.Character:FindFirstChild("HumanoidRootPart")
-    
-    if targetRoot and playerRoot then
-        -- Luôn cập nhật hướng nhìn về phía target
-        playerRoot.CFrame = CFrame.new(playerRoot.Position, targetRoot.Position)
-    end
+-- Function to get position behind target
+local function getPositionBehindTarget(targetCFrame)
+    return targetCFrame * CFrame.new(0, 0, DISTANCE)
 end
 
--- Function to aim at target
+-- Function to aim at target (hệ thống aimbot mới từ script 2)
 local function aimAtTarget(targetPlayer)
     if not targetPlayer or not targetPlayer.Character or not player.Character then
         return
@@ -200,22 +213,20 @@ local function aimAtTarget(targetPlayer)
         -- Tính toán vector hướng từ player đến target
         local lookVector = (targetPos - playerPos).Unit
         
+        -- Tính toán dự đoán chuyển động
+        local targetVelocity = targetHead.Velocity
+        local predictionOffset = targetVelocity * 0.165
+        local predictedPos = targetPos + predictionOffset
+        
         -- Tạo CFrame mới cho nhân vật, luôn hướng về target
-        playerHumanoidRootPart.CFrame = CFrame.lookAt(playerHumanoidRootPart.Position, targetPos)
+        playerHumanoidRootPart.CFrame = CFrame.lookAt(playerHumanoidRootPart.Position, predictedPos)
+        
+        -- Tính toán vị trí camera với zoom
+        local cameraPos = playerPos - lookVector * currentZoom
+        
+        -- Đặt camera
+        camera.CFrame = CFrame.new(cameraPos, predictedPos)
     end
-end
-
--- Function to get position behind target
-local function getPositionBehindTarget(targetCFrame)
-    -- Tạo một vector hướng từ target ra phía sau
-    local lookVector = targetCFrame.LookVector
-    local targetPosition = targetCFrame.Position
-    
-    -- Tính toán vị trí phía sau target
-    local behindPosition = targetPosition - (lookVector * DISTANCE)
-    
-    -- Tạo CFrame mới với vị trí phía sau và hướng nhìn về phía target
-    return CFrame.new(behindPosition, targetPosition)
 end
 
 -- Function to follow and attack target
@@ -228,11 +239,8 @@ local function followAndAttackTarget(targetPlayer)
     local playerRoot = player.Character:FindFirstChild("HumanoidRootPart")
     
     if targetRoot and playerRoot then
-        -- Teleport phía sau target
         local newPosition = getPositionBehindTarget(targetRoot.CFrame)
         playerRoot.CFrame = newPosition
-        
-        -- Aim vào target
         aimAtTarget(targetPlayer)
     end
 end
@@ -254,16 +262,14 @@ local function toggleAutoKills()
         -- Move to waiting position initially
         moveToWaitingPosition()
         
-        -- Start main loop with RenderStepped for smoother aiming
-        connection = RunService.RenderStepped:Connect(function()
+        -- Start main loop
+        connection = RunService.Heartbeat:Connect(function()
             -- Find target
             currentTarget = findValidTarget()
             
             if currentTarget then
                 -- Follow and aim at target until they die
                 followAndAttackTarget(currentTarget)
-                -- Continuously aim at target
-                aimAtTarget(currentTarget)
             else
                 -- Only return to waiting position if no valid target
                 moveToWaitingPosition()
@@ -306,11 +312,10 @@ local function toggleAutoKills()
             "Head First"
         }
         
-        -- Start skill threads
         for _, skillName in ipairs(skillNames) do
             local thread = task.spawn(function()
                 while autoKillsEnabled do
-                    if currentTarget then
+                    if currentTarget then -- Only use skills if we have a target
                         useSkill(skillName)
                     end
                     task.wait()
@@ -319,7 +324,7 @@ local function toggleAutoKills()
             table.insert(skillThreads, thread)
         end
         
-        -- Start auto M1 thread
+        -- Start auto M1 (only when we have a target)
         m1Thread = task.spawn(function()
             while autoKillsEnabled do
                 if currentTarget then
@@ -331,7 +336,6 @@ local function toggleAutoKills()
             end
         end)
     else
-        -- Disable auto kills
         autoKillsButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
         autoKillsButton.Text = "START AUTO KILLS"
         
@@ -356,7 +360,6 @@ local function toggleAutoKills()
             m1Thread = nil
         end
         
-        -- Clear current target
         currentTarget = nil
     end
 end
@@ -427,6 +430,9 @@ local function startSpinning()
         end
     end)
 end
+
+-- Initialize zoom handling
+handleZoom()
 
 -- Start spinning immediately
 startSpinning()
