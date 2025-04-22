@@ -181,12 +181,12 @@ local function aimAtTarget(targetPlayer)
         return
     end
     
-    local targetHead = targetPlayer.Character:FindFirstChild("Head")
+    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart") -- Thay đổi từ Head sang HumanoidRootPart
     local playerHead = player.Character:FindFirstChild("Head")
     local playerHumanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
     
-    if targetHead and playerHead and playerHumanoidRootPart then
-        local targetPos = targetHead.Position
+    if targetRoot and playerHead and playerHumanoidRootPart then
+        local targetPos = targetRoot.Position -- Nhắm vào thân thay vì đầu
         local playerPos = playerHead.Position
         
         playerHumanoidRootPart.CFrame = CFrame.lookAt(playerHumanoidRootPart.Position, targetPos)
