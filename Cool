@@ -211,24 +211,17 @@ local function aimAtTarget(targetPlayer)
         local targetPos = targetHead.Position
         local playerPos = playerHead.Position
         
-        -- Hệ thống dự đoán được cải thiện
+        -- Dự đoán vị trí
         local targetVelocity = targetHead.Velocity
-        local ping = stats:GetValue("ServerStatsItem", "Data Ping") or 100 -- Lấy ping hiện tại hoặc dùng giá trị mặc định
-        local predictionTime = ping / 1000 + 0.165 -- Tính toán thời gian dự đoán dựa trên ping
+        local predictionTime = 0.165 -- Giảm thời gian dự đoán
         local predictionOffset = targetVelocity * predictionTime
         local predictedPos = targetPos + predictionOffset
         
-        -- Xoay nhân vật mượt mà
-        local currentRotation = playerHumanoidRootPart.CFrame.Rotation
-        local targetRotation = CFrame.lookAt(playerHumanoidRootPart.Position, predictedPos).Rotation
-        local smoothedRotation = currentRotation:Lerp(targetRotation, 0.2) -- Làm mượt việc xoay
+        -- Cập nhật hướng nhìn của nhân vật ngay lập tức
+        playerHumanoidRootPart.CFrame = CFrame.lookAt(playerHumanoidRootPart.Position, predictedPos)
         
-        -- Cập nhật hướng nhân vật và giữ thẳng đứng
-        playerHumanoidRootPart.CFrame = CFrame.new(playerHumanoidRootPart.Position) * smoothedRotation
-        
-        -- Cập nhật camera mượt mà
-        local cameraPos = playerPos - (predictedPos - playerPos).Unit * currentZoom
-        camera.CFrame = camera.CFrame:Lerp(CFrame.new(cameraPos, predictedPos), 0.2)
+        -- Cập nhật camera ngay lập tức
+        camera.CFrame = CFrame.new(playerPos - (predictedPos - playerPos).Unit * currentZoom, predictedPos)
     end
 end
 
@@ -242,17 +235,12 @@ local function followAndAttackTarget(targetPlayer)
     local playerRoot = player.Character:FindFirstChild("HumanoidRootPart")
     
     if targetRoot and playerRoot then
-        local targetPos = targetRoot.Position
-        local playerPos = playerRoot.Position
-        local lookVector = (targetPos - playerPos).Unit
+        -- Di chuyển tới vị trí sau lưng mục tiêu
+        local behindPosition = targetRoot.Position - targetRoot.CFrame.LookVector * DISTANCE
+        playerRoot.CFrame = CFrame.new(behindPosition, targetRoot.Position)
         
-        -- Tính toán vị trí phía sau mục tiêu và giữ nhân vật đứng thẳng
-        local behindPosition = targetRoot.Position - (lookVector * DISTANCE)
-        playerRoot.CFrame = CFrame.new(behindPosition) * CFrame.new(0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1)
-        
-        -- Giữ nhân vật đứng thẳng trong khi nhìn vào mục tiêu
-        local lookAt = CFrame.lookAt(behindPosition, targetPos)
-        playerRoot.CFrame = CFrame.new(behindPosition) * CFrame.Angles(0, lookAt.Y, 0)
+        -- Gọi hàm aimAtTarget để cập nhật hướng nhìn
+        aimAtTarget(targetPlayer)
     end
 end
 
