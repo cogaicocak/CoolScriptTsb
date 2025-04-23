@@ -1,4 +1,5 @@
 -- Services
+local stats = game:GetService("Stats")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -210,22 +211,24 @@ local function aimAtTarget(targetPlayer)
         local targetPos = targetHead.Position
         local playerPos = playerHead.Position
         
-        -- Tính toán vector hướng từ player đến target
-        local lookVector = (targetPos - playerPos).Unit
-        
-        -- Tính toán dự đoán chuyển động
+        -- Hệ thống dự đoán được cải thiện
         local targetVelocity = targetHead.Velocity
-        local predictionOffset = targetVelocity * 0.165
+        local ping = stats:GetValue("ServerStatsItem", "Data Ping") or 100 -- Lấy ping hiện tại hoặc dùng giá trị mặc định
+        local predictionTime = ping / 1000 + 0.165 -- Tính toán thời gian dự đoán dựa trên ping
+        local predictionOffset = targetVelocity * predictionTime
         local predictedPos = targetPos + predictionOffset
         
-        -- Tạo CFrame mới cho nhân vật, luôn hướng về target
-        playerHumanoidRootPart.CFrame = CFrame.lookAt(playerHumanoidRootPart.Position, predictedPos)
+        -- Xoay nhân vật mượt mà
+        local currentRotation = playerHumanoidRootPart.CFrame.Rotation
+        local targetRotation = CFrame.lookAt(playerHumanoidRootPart.Position, predictedPos).Rotation
+        local smoothedRotation = currentRotation:Lerp(targetRotation, 0.2) -- Làm mượt việc xoay
         
-        -- Tính toán vị trí camera với zoom
-        local cameraPos = playerPos - lookVector * currentZoom
+        -- Cập nhật hướng nhân vật và giữ thẳng đứng
+        playerHumanoidRootPart.CFrame = CFrame.new(playerHumanoidRootPart.Position) * smoothedRotation
         
-        -- Đặt camera
-        camera.CFrame = CFrame.new(cameraPos, predictedPos)
+        -- Cập nhật camera mượt mà
+        local cameraPos = playerPos - (predictedPos - playerPos).Unit * currentZoom
+        camera.CFrame = camera.CFrame:Lerp(CFrame.new(cameraPos, predictedPos), 0.2)
     end
 end
 
@@ -239,9 +242,17 @@ local function followAndAttackTarget(targetPlayer)
     local playerRoot = player.Character:FindFirstChild("HumanoidRootPart")
     
     if targetRoot and playerRoot then
-        local newPosition = getPositionBehindTarget(targetRoot.CFrame)
-        playerRoot.CFrame = newPosition
-        aimAtTarget(targetPlayer)
+        local targetPos = targetRoot.Position
+        local playerPos = playerRoot.Position
+        local lookVector = (targetPos - playerPos).Unit
+        
+        -- Tính toán vị trí phía sau mục tiêu và giữ nhân vật đứng thẳng
+        local behindPosition = targetRoot.Position - (lookVector * DISTANCE)
+        playerRoot.CFrame = CFrame.new(behindPosition) * CFrame.new(0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1)
+        
+        -- Giữ nhân vật đứng thẳng trong khi nhìn vào mục tiêu
+        local lookAt = CFrame.lookAt(behindPosition, targetPos)
+        playerRoot.CFrame = CFrame.new(behindPosition) * CFrame.Angles(0, lookAt.Y, 0)
     end
 end
 
