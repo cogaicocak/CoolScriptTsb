@@ -176,7 +176,7 @@ local function findValidTarget()
 
     -- Find new target if current target is invalid
     local validTarget = nil
-    local lowestHealth = 101 -- Only target players with health below 20
+    local lowestHealth = 20 -- Only target players with health below 20
 
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= player then
