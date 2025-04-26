@@ -165,18 +165,18 @@ end
 
 -- Function to find valid target
 local function findValidTarget()
-    -- If we have a current target, check if we should keep targeting them
+    -- Nếu đã có mục tiêu, kiểm tra xem có nên tiếp tục tấn công không
     if currentTarget then
         local health = getPlayerHealth(currentTarget)
-        -- Only drop target if they die (health = 0)
-        if health > 0 then
-            return currentTarget -- Continue targeting current target
+        -- Bỏ mục tiêu nếu họ chết hoặc máu vượt quá 20
+        if health > 0 and health < 20 then
+            return currentTarget -- Tiếp tục tấn công mục tiêu hiện tại
         end
     end
 
-    -- Find new target if current target is invalid
+    -- Tìm mục tiêu mới nếu mục tiêu hiện tại không hợp lệ
     local validTarget = nil
-    local lowestHealth = 20 -- Only target players with health below 20
+    local lowestHealth = 20 -- Chỉ nhắm mục tiêu người chơi có máu dưới 20
 
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= player then
